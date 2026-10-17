@@ -65,7 +65,10 @@ export class Repository {
     if (!Array.isArray(data.accountIds) || !data.accountIds.length || data.accountIds.length > 100) throw new Error('请选择 1—100 个账号');
     const accountIds = Array.from(new Set(data.accountIds.map(id)));
     return this.db.transaction(() => {
-      if (!this.db.prepare('SELECT id FROM assets WHERE id=?').get(assetId)) throw new Error('素材不存在');
+      const assetRow = this.db.prepare('SELECT data FROM assets WHERE id=?').get(assetId) as any;
+      if (!assetRow) throw new Error('素材不存在');
+      const availability = JSON.parse(assetRow.data).availability;
+      if (availability && availability !== 'ready') throw new Error('素材文件不可用，请重新导入原视频后重试');
       for (const accountId of accountIds) if (!this.getAccount(accountId)) throw new Error('账号不存在');
       const tasks: DesktopTask[] = [];
       for (const accountId of accountIds) {
@@ -83,6 +86,18 @@ export class Repository {
     this.db.transaction(() => { this.db.prepare("UPDATE tasks SET status='cancelled' WHERE id=?").run(taskId); this.db.prepare('INSERT INTO task_events(task_id,event,created_at) VALUES(?,?,?)').run(taskId,'用户取消',new Date().toISOString()); })();
   }
   assetByHash(hash: string): DesktopAsset | undefined { const row = this.db.prepare('SELECT data FROM assets WHERE sha256=?').get(hash) as any; return row ? JSON.parse(row.data) : undefined; }
+  managedAssets(): { asset: DesktopAsset; relativePath: string }[] {
+    return this.db.prepare('SELECT data,relative_path FROM assets').all().map((row: any) => ({ asset: JSON.parse(row.data), relativePath: row.relative_path }));
+  }
+  setAssetAvailability(assetId: string, availability: NonNullable<DesktopAsset['availability']>, relativePath?: string): void {
+    this.db.transaction(() => {
+      const row = this.db.prepare('SELECT data FROM assets WHERE id=?').get(id(assetId)) as any;
+      if (!row) throw new Error('素材不存在');
+      const asset = { ...JSON.parse(row.data), availability };
+      if (relativePath) this.db.prepare('UPDATE assets SET data=?,relative_path=? WHERE id=?').run(JSON.stringify(asset), relativePath, assetId);
+      else this.db.prepare('UPDATE assets SET data=? WHERE id=?').run(JSON.stringify(asset), assetId);
+    })();
+  }
   addAsset(asset: DesktopAsset, relativePath: string): void { this.db.prepare('INSERT INTO assets VALUES (?,?,?,?)').run(asset.id, asset.sha256, relativePath, JSON.stringify(asset)); }
   updateAsset(assetId: string, input: { title: string; tag: string }): DesktopAsset {
     const data = record(input, ['title','tag']); const title = text(data.title,'作品标题',100), tag = text(data.tag,'分类',30);

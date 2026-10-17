@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readdir, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { launchDesktop } from './helpers';
@@ -32,4 +32,40 @@ test('media imports Unicode paths, rejects unsafe files, deduplicates and surviv
     expect(result.first.added).toBe(1);expect(result.first.duplicates).toBe(1);expect(result.first.failures).toHaveLength(result.expectedFailures);
     expect(result).toMatchObject({count:1,hashMatches:true,noTemp:true,taskTitle:'任务快照标题',duplicate:true,status:'cancelled'});
   } finally { await app.close();await rm(dir,{recursive:true,force:true}); }
+});
+
+test('missing and corrupt managed videos are blocked and can be repaired without losing metadata or tasks', async () => {
+  const dir=await mkdtemp(join(tmpdir(),'xumu-recovery-'));const source=join(dir,'恢复视频.mp4');
+  await writeFile(source,Buffer.from('000000186674797069736f6d0000020069736f6d69736f32','hex'));
+  let app=await launchDesktop(dir);
+  try {
+    let page=await app.firstWindow();
+    await app.evaluate(({dialog},path)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[path]});},source);
+    await page.evaluate(async()=>{await window.xumu!.createAccount({name:'恢复账号',group:'门店'});await window.xumu!.importVideos();const state=await window.xumu!.getSnapshot();await window.xumu!.updateAsset(state.assets[0].id,{title:'保留的编辑标题',tag:'门店日常'});await window.xumu!.createTasks({assetId:state.assets[0].id,accountIds:[state.accounts[0].id],title:'原任务'});});
+    for(const damage of ['missing','corrupt']) {
+      const before=await page.evaluate(()=>window.xumu!.getSnapshot());await app.close();
+      const mediaDir=join(dir,'media');const file=join(mediaDir,(await readdir(mediaDir)).find(f=>!f.startsWith('.'))!);
+      if(damage==='missing')await unlink(file);else await writeFile(file,'corrupted managed video');
+      app=await launchDesktop(dir);page=await app.firstWindow();
+      const state=await page.evaluate(()=>window.xumu!.getSnapshot());
+      expect(state.assets[0].availability).toBe(damage);
+      const blocked=await page.evaluate(async()=>{const s=await window.xumu!.getSnapshot();try{await window.xumu!.createTasks({assetId:s.assets[0].id,accountIds:[s.accounts[0].id],title:'不可用'});return false;}catch(error){return String(error).includes('重新导入');}});expect(blocked).toBe(true);
+      await page.getByRole('navigation').getByRole('button',{name:'素材库'}).click();await expect(page.getByText(damage==='missing'?'文件缺失，请重新导入':'文件损坏，请重新导入')).toBeVisible();
+      await app.evaluate(({dialog},path)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[path]});},source);
+      const report=await page.evaluate(()=>window.xumu!.importVideos());expect(report).toMatchObject({added:0,repaired:1,duplicates:0,failures:[]});
+      const restored=await page.evaluate(()=>window.xumu!.getSnapshot());expect(restored.assets).toHaveLength(1);expect(restored.assets[0]).toMatchObject({id:before.assets[0].id,title:'保留的编辑标题',tag:'门店日常',availability:'ready'});expect(restored.tasks).toEqual(before.tasks);
+    }
+  }finally{await app.close();await rm(dir,{recursive:true,force:true});}
+});
+
+test('normal quit cancels active imports and startup removes abandoned application temporary files',async()=>{
+  test.setTimeout(60_000);const dir=await mkdtemp(join(tmpdir(),'xumu-quit-import-'));let app=await launchDesktop(dir);
+  try{
+    const source=join(dir,'大视频.mp4');await app.evaluate(({dialog},path)=>{const require=process.getBuiltinModule('module')!.createRequire(process.cwd()+'/package.json');const fs=require('node:fs');fs.writeFileSync(path,Buffer.from('000000186674797069736f6d0000020069736f6d69736f32','hex'));fs.truncateSync(path,1024*1024*1024);dialog.showOpenDialog=async()=>({canceled:false,filePaths:[path]});},source);
+    const page=await app.firstWindow();await page.evaluate(()=>{void window.xumu!.importVideos().catch(()=>undefined);});
+    const mediaDir=join(dir,'media');await expect.poll(async()=>(await readdir(mediaDir).catch(()=>[])).some(f=>f.endsWith('.tmp'))).toBe(true);
+    await app.close();expect((await readdir(mediaDir)).filter(f=>f.endsWith('.tmp'))).toEqual([]);
+    const abandoned='.00000000-0000-4000-8000-000000000001.tmp';await writeFile(join(mediaDir,abandoned),'interrupted');await writeFile(join(mediaDir,'user-notes.tmp'),'keep');
+    app=await launchDesktop(dir);await app.firstWindow();expect(await readdir(mediaDir)).not.toContain(abandoned);expect(await readdir(mediaDir)).toContain('user-notes.tmp');
+  }finally{await app.close();await rm(dir,{recursive:true,force:true});}
 });

@@ -1,7 +1,7 @@
 export type Page = 'overview' | 'accounts' | 'assets' | 'tasks' | 'messages' | 'settings';
 export type TaskStatus = 'pending' | 'running' | 'demo_done' | 'review' | 'cancelled';
 export interface Account { id: string; name: string; handle: string; group: string; color: string; initial: string; demo: boolean; followers: string; loginStatus?: import('../shared/desktop-contracts').LoginStatus; identity?: import('../shared/desktop-contracts').Identity; }
-export interface Asset { id: string; title: string; filename: string; poster: string; tag: string; duration: string; size: string; imported: boolean; }
+export interface Asset { id: string; title: string; filename: string; poster: string; tag: string; duration: string; size: string; imported: boolean; availability?: 'ready' | 'missing' | 'corrupt' }
 export interface Task { id: string; accountId: string; assetId: string; title: string; status: TaskStatus; time: string; }
 export interface Message { id: string; accountId: string; name: string; initial: string; color: string; type: 'comment' | 'private'; text: string; time: string; processed: boolean; draft: string; }
 export interface Workspace { version: 1; accounts: Account[]; assets: Asset[]; tasks: Task[]; messages: Message[]; }

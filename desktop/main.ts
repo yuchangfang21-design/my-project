@@ -7,6 +7,7 @@ import { MediaLibrary } from './media/library.js';
 import { SessionManager } from './browser/session-manager.js';
 let repository: Repository;
 let sessions: SessionManager;
+let media: MediaLibrary;
 let quitting = false;
 
 const dataOverride=app.commandLine.getSwitchValue('user-data-dir') || (!app.isPackaged?process.env.XUMU_DATA_DIR:undefined);
@@ -19,9 +20,13 @@ export function createDesktopWindow(): BrowserWindow {
   void win.loadFile(join(__dirname, '../renderer/desktop.html'));
   return win;
 }
-app.whenReady().then(() => {
+const primaryInstance = app.requestSingleInstanceLock();
+if (!primaryInstance) app.quit();
+app.on('second-instance', () => { const win = BrowserWindow.getAllWindows()[0]; if (win?.isMinimized()) win.restore(); win?.focus(); });
+if (primaryInstance) app.whenReady().then(async () => {
   repository = new Repository(app.getPath('userData')); repository.initialize();
-  const media = new MediaLibrary(app.getPath('userData'),repository);
+  media = new MediaLibrary(app.getPath('userData'),repository); await media.initialize();
+  if (quitting) return;
   sessions = new SessionManager(join(app.getPath('userData'),'profiles'),repository);
   ipcMain.handle('xumu:runtime', event => {
     if (event.senderFrame !== event.sender.mainFrame || !BrowserWindow.fromWebContents(event.sender)) throw new Error('不允许的调用来源');
@@ -29,6 +34,9 @@ app.whenReady().then(() => {
   });
   registerIpc(createDesktopWindow(), repository, media, sessions);
   app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) registerIpc(createDesktopWindow(), repository, media, sessions); });
-}).catch(error => { dialog.showErrorBox('序幕启动失败', String(error.message || error)); app.exit(1); });
+}).catch(error => { if (!quitting) { dialog.showErrorBox('序幕启动失败', String(error.message || error)); app.exit(1); } });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-app.on('before-quit',event=>{if(quitting)return;event.preventDefault();quitting=true;void sessions?.closeAll().finally(()=>{repository?.close();app.quit();});if(!sessions){repository?.close();app.quit();}});
+app.on('before-quit',event=>{
+  if(quitting)return;event.preventDefault();quitting=true;
+  void Promise.allSettled([media?.close(),sessions?.closeAll()]).then(()=>{repository?.close();app.quit();});
+});

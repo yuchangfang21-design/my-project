@@ -25,12 +25,20 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - run: npx playwright test -c playwright.packaged.config.ts
+      - name: Hash Windows installers
+        shell: pwsh
+        run: |
+          Get-ChildItem release -Filter *.exe | ForEach-Object {
+            $packageHash = Get-FileHash $_.FullName -Algorithm SHA256
+            '{0}  {1}' -f $packageHash.Hash.ToLowerInvariant(), $_.Name
+          } | Set-Content -Path release/SHA256SUMS.txt -Encoding ascii
       - uses: actions/upload-artifact@v4
         with:
           name: Xumu-Windows-x64
           path: |
             release/*.exe
             release/*.blockmap
+            release/SHA256SUMS.txt
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()

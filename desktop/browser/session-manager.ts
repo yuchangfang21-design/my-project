@@ -19,7 +19,12 @@ export class SessionManager {
   private contexts = new Map<string, BrowserContext>();
   private opening = new Map<string, Promise<LoginObservation>>();
   private disposed = false;
-  constructor(private profileRoot: string, private repository: Repository, private dependencies: Dependencies = {}) {}
+  constructor(private profileRoot: string, private repository: Repository, private dependencies: Dependencies = {}) {
+    for (const account of repository.snapshot().accounts) {
+      const prior = repository.getConnection(account.id);
+      if (prior.status === 'opening' || prior.status === 'logged_in') repository.recordConnection({ ...prior, status: 'pending_confirmation', reason: '应用已重新启动，请打开官方页面重新核实账号。' });
+    }
+  }
   open(accountId: string): Promise<LoginObservation> {
     id(accountId); if (!this.repository.getAccount(accountId)) return Promise.reject(new Error('账号不存在'));
     if (this.disposed) return Promise.reject(new Error('应用正在关闭'));
@@ -50,7 +55,13 @@ export class SessionManager {
   }
   async refresh(accountId: string): Promise<LoginObservation> {
     const prior=this.repository.getConnection(id(accountId));const context=this.contexts.get(accountId);
-    if(!context)return {...prior,status:prior.status==='opening'?'pending_confirmation':prior.status};
+    if(!context){
+      if(prior.status==='opening'||prior.status==='logged_in'){
+        const recovered:LoginObservation={...prior,status:'pending_confirmation',reason:'当前没有活动的登录浏览器，请重新打开并核实账号。'};
+        this.repository.recordConnection(recovered);return recovered;
+      }
+      return prior;
+    }
     const page=context.pages()[0];let identity:Identity|null=null;
     try{if(page)identity=await (this.dependencies.observe||observeIdentity)(page);}catch{identity=null;}
     let observation:LoginObservation={...prior,status:'pending_confirmation',reason:'登录浏览器已打开；身份识别尚未完成实机验证，请在官方页面确认账号。'};

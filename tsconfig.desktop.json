@@ -1,0 +1,4 @@
+{
+  "compilerOptions": { "target": "ES2022", "module": "Node16", "moduleResolution": "Node16", "outDir": "dist-desktop", "rootDir": ".", "strict": true, "skipLibCheck": true, "esModuleInterop": true, "types": ["node"], "lib": ["ES2022", "DOM"] },
+  "include": ["desktop/**/*.ts", "shared/**/*.ts"]
+}

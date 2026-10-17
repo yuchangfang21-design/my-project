@@ -8,20 +8,31 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "npm run demo:export && playwright test",
-    "demo:export": "npm run build && node scripts/export-preview.mjs"
+    "demo:export": "npm run build && node scripts/export-preview.mjs",
+    "desktop:build": "node scripts/build-desktop.mjs",
+    "desktop:dev": "npm run desktop:build && electron .",
+    "test:desktop": "node scripts/test-desktop.mjs",
+    "desktop:dist": "npm run desktop:build && electron-builder",
+    "desktop:prepare": "node node_modules/electron/install.js && electron-builder install-app-deps"
   },
   "dependencies": {
+    "better-sqlite3": "13.0.3",
     "lucide-react": "1.59.0",
+    "playwright-core": "1.64.1",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",
+    "@types/better-sqlite3": "9.6.0",
     "@types/node": "26.6.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",
+    "electron": "44.9.0",
+    "electron-builder": "26.15.3",
     "typescript": "7.0.2",
     "vite": "8.3.4"
-  }
+  },
+  "main": "dist-desktop/desktop/main.js"
 }

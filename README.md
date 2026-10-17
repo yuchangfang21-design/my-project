@@ -28,6 +28,16 @@ Windows 原生构建入口是仓库 Actions 的 **Build Windows desktop**。安�
 
 最新云端结果：浏览器 10 项、实际 Electron 11 项、Linux 打包版 1 项测试全部通过；Windows 原生构建与安装结果仍需在对应平台确认。
 
+## 后续设计稿
+
+继续沿用当前界面，补齐发布前核对、结果待核对和统一消息工作台。这是静态设计评审稿，尚未启用真实发布或消息操作。
+
+- [发布前核对效果图](artifacts/design-publishing-review.png)
+- [结果待核对效果图](artifacts/design-publishing-recovery.png)
+- [统一消息工作台效果图](artifacts/design-inbox-workbench.png)
+- [下载设计稿包](artifacts/xumu-next-stage-design.zip)：下载原始 ZIP 后解压，用 Edge 或 Chrome 打开 `index.html`，无需安装依赖。
+- [详细流程设计](docs/superpowers/specs/2026-10-17-publishing-and-inbox-experience-design.md)
+
 ## 直接查看效果
 
 聊天内置预览不可用时，可以从本仓库的 `preview/xumu-demo` 分支取得文件：

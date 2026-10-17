@@ -24,6 +24,10 @@ Linux 图形测试需要 Xvfb 或已有 DISPLAY，缺少默认 Xvfb 时可设置
 
 Windows 原生构建入口是仓库 Actions 的 **Build Windows desktop**。安装包实际生成并通过测试后，工作流提供 **Xumu-Windows-x64** 产物。构建未配置开发者签名，未运行的 Windows 验收不算通过；详见 [Windows 验收步骤](docs/windows-desktop-acceptance.md)。
 
+[打开 Windows 构建页面](https://github.com/yuchangfang21-design/my-project/actions/workflows/windows-build.yml) · [桌面实机运行截图](https://github.com/yuchangfang21-design/my-project/blob/preview/xumu-demo/artifacts/desktop-overview.png) · [本阶段交付与验证记录](docs/desktop-foundation-delivery.md)
+
+最新云端结果：浏览器 10 项、实际 Electron 11 项、Linux 打包版 1 项测试全部通过；Windows 原生构建与安装结果仍需在对应平台确认。
+
 ## 直接查看效果
 
 聊天内置预览不可用时，可以从本仓库的 `preview/xumu-demo` 分支取得文件：

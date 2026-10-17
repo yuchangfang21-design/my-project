@@ -6,5 +6,7 @@ const api: DesktopApi = {
   createAccount: input => ipcRenderer.invoke('xumu:create-account', input),
   createTasks: input => ipcRenderer.invoke('xumu:create-tasks', input),
   cancelTask: taskId => ipcRenderer.invoke('xumu:cancel-task', taskId),
+  importVideos: () => ipcRenderer.invoke('xumu:import-videos'),
+  updateAsset: (assetId, input) => ipcRenderer.invoke('xumu:update-asset', assetId, input),
 };
 contextBridge.exposeInMainWorld('xumu', api);

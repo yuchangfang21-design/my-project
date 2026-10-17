@@ -1,6 +1,7 @@
-import { BrowserWindow, ipcMain, type IpcMainInvokeEvent } from 'electron';
+import { BrowserWindow, ipcMain, dialog, type IpcMainInvokeEvent } from 'electron';
 import type { Repository } from './storage/repository.js';
-export function registerIpc(window: BrowserWindow, repository: Repository): void {
+import type { MediaLibrary } from './media/library.js';
+export function registerIpc(window: BrowserWindow, repository: Repository, media: MediaLibrary): void {
   const handle = (channel: string, action: (...args: any[]) => unknown) => {
     ipcMain.removeHandler(channel);
     ipcMain.handle(channel, (event: IpcMainInvokeEvent, ...args: any[]) => {
@@ -12,4 +13,9 @@ export function registerIpc(window: BrowserWindow, repository: Repository): void
   handle('xumu:create-account', input => repository.createAccount(input));
   handle('xumu:create-tasks', input => repository.createTasks(input));
   handle('xumu:cancel-task', taskId => repository.cancelTask(taskId));
+  handle('xumu:update-asset', (assetId, input) => repository.updateAsset(assetId,input));
+  handle('xumu:import-videos', async () => {
+    const result=await dialog.showOpenDialog(window,{title:'导入本地视频',properties:['openFile','multiSelections'],filters:[{name:'视频文件',extensions:['mp4','mov']}]});
+    return result.canceled ? {added:0,duplicates:0,failures:[]} : media.importFiles(result.filePaths);
+  });
 }

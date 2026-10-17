@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
-import { join } from 'node:path';
+import { join, isAbsolute } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { Repository } from './storage/repository.js';
 import { registerIpc } from './ipc.js';
@@ -9,7 +9,8 @@ let repository: Repository;
 let sessions: SessionManager;
 let quitting = false;
 
-if (!app.isPackaged && process.env.XUMU_DATA_DIR) { mkdirSync(process.env.XUMU_DATA_DIR, { recursive: true }); app.setPath('userData', process.env.XUMU_DATA_DIR); }
+const dataOverride=app.commandLine.getSwitchValue('user-data-dir') || (!app.isPackaged?process.env.XUMU_DATA_DIR:undefined);
+if(dataOverride){if(!isAbsolute(dataOverride))throw new Error('数据目录必须是绝对路径');mkdirSync(dataOverride,{recursive:true});app.setPath('userData',dataOverride);}
 export function createDesktopWindow(): BrowserWindow {
   const win = new BrowserWindow({ width: 1440, height: 1000, minWidth: 960, minHeight: 700, title: '序幕 · 创作者工作台', backgroundColor: '#f7f8fa', autoHideMenuBar: true, webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));

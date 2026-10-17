@@ -1,6 +1,28 @@
 # 序幕 · 创作者工作台
 
-Windows 多账号运营工具的**可操作界面演示**。采用 React、TypeScript、Vite；不是 Windows 桌面安装包。
+Windows 多账号运营工具，包含已确认的 HTML 界面演示和 **0.2.0 Electron 桌面基础版**。桌面版可持久保存账号、真实视频副本和本地任务，并管理独立的账号登录浏览器。真实身份解析、视频发布和消息接入仍待验证或开发。
+
+## 桌面基础版
+
+使用 Node.js 24，在项目目录运行：
+
+```sh
+npm ci
+npm run desktop:prepare
+npm run desktop:dev
+```
+
+电脑需安装 Chrome 或 Edge。账号扫码在官方页面完成；当前没有已验证的抖音身份解析器，因此账号保持待确认，不会仅因打开网页就标为已登录。桌面版首次为空，与下面的演示数据独立。
+
+```sh
+npm run test:desktop
+npm run desktop:dist -- --win --x64
+npm run test:packaged
+```
+
+Linux 图形测试需要 Xvfb 或已有 DISPLAY，缺少默认 Xvfb 时可设置 `XUMU_XVFB_PATH`。Windows 不使用 Xvfb。SQLite 13 使用 npm 包中已验证可由 Electron 加载的 Node-API 预编译模块；不执行多余的 ABI 重编译。
+
+Windows 原生构建入口是仓库 Actions 的 **Build Windows desktop**。安装包实际生成并通过测试后，工作流提供 **Xumu-Windows-x64** 产物。构建未配置开发者签名，未运行的 Windows 验收不算通过；详见 [Windows 验收步骤](docs/windows-desktop-acceptance.md)。
 
 ## 直接查看效果
 
@@ -53,4 +75,4 @@ npm run demo:export
 - [Windows 产品设计](docs/superpowers/specs/2026-10-17-douyin-desktop-design.md)
 - [本次效果演示实施计划](docs/superpowers/plans/2026-10-17-interactive-preview.md)
 
-真实 Windows 桌面壳、独立浏览器会话、真实扫码、视频发布、评论及私信接入尚未实现。后续需要逐项验证真实站点能力、账号隔离、发布结果核对和 Windows 安装包，不能用本演示的通过结果替代实机验收。
+桌面壳、SQLite、本地媒体和独立浏览器会话已实现，Linux Electron 测试单独记录。真实 Windows 扫码、身份识别、视频发布、评论及私信接入尚未通过验收，不能用 HTML 演示或本地夹具结果替代。

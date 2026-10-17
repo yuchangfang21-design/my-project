@@ -1,5 +1,6 @@
 appId: com.xumu.workspace
 productName: 序幕
+executableName: xumu-workspace
 directories:
   output: release
 files:
@@ -9,9 +10,13 @@ asarUnpack:
   - node_modules/better-sqlite3/**
 npmRebuild: false
 win:
+  signAndEditExecutable: false
   target:
     - target: nsis
       arch: [x64]
+linux:
+  target: dir
+artifactName: Xumu-${version}-${os}-${arch}.${ext}
 nsis:
   oneClick: false
   perMachine: false

@@ -16,5 +16,8 @@ export interface DesktopApi {
   cancelTask(taskId: string): Promise<void>;
   importVideos(): Promise<ImportReport>;
   updateAsset(assetId: string, input: { title: string; tag: string }): Promise<DesktopAsset>;
+  openAccount(accountId: string): Promise<LoginObservation>;
+  closeAccount(accountId: string): Promise<void>;
+  getConnection(accountId: string): Promise<LoginObservation>;
 }
 declare global { interface Window { xumu?: DesktopApi } }

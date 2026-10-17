@@ -8,5 +8,8 @@ const api: DesktopApi = {
   cancelTask: taskId => ipcRenderer.invoke('xumu:cancel-task', taskId),
   importVideos: () => ipcRenderer.invoke('xumu:import-videos'),
   updateAsset: (assetId, input) => ipcRenderer.invoke('xumu:update-asset', assetId, input),
+  openAccount: accountId => ipcRenderer.invoke('xumu:open-account', accountId),
+  closeAccount: accountId => ipcRenderer.invoke('xumu:close-account', accountId),
+  getConnection: accountId => ipcRenderer.invoke('xumu:connection', accountId),
 };
 contextBridge.exposeInMainWorld('xumu', api);

@@ -2,7 +2,9 @@ import { BrowserWindow, ipcMain, dialog, type IpcMainInvokeEvent } from 'electro
 import type { Repository } from './storage/repository.js';
 import type { MediaLibrary } from './media/library.js';
 import type { SessionManager } from './browser/session-manager.js';
-export function registerIpc(window: BrowserWindow, repository: Repository, media: MediaLibrary, sessions: SessionManager): void {
+import type { PublishingService } from './publishing/service.js';
+import type { OperationCoordinator } from './publishing/coordinator.js';
+export function registerIpc(window: BrowserWindow, repository: Repository, media: MediaLibrary, sessions: SessionManager, publishing:PublishingService,coordinator:OperationCoordinator): void {
   const handle = (channel: string, action: (...args: any[]) => unknown) => {
     ipcMain.removeHandler(channel);
     ipcMain.handle(channel, (event: IpcMainInvokeEvent, ...args: any[]) => {
@@ -14,9 +16,20 @@ export function registerIpc(window: BrowserWindow, repository: Repository, media
   handle('xumu:create-account', input => repository.createAccount(input));
   handle('xumu:create-tasks', async input => { await media.checkAsset(input?.assetId); return repository.createTasks(input); });
   handle('xumu:cancel-task', taskId => repository.cancelTask(taskId));
-  handle('xumu:open-account', accountId => sessions.open(accountId));
-  handle('xumu:close-account', accountId => sessions.close(accountId));
-  handle('xumu:connection', accountId => sessions.refresh(accountId));
+  handle('xumu:open-account', accountId => coordinator.run(()=>sessions.open(accountId)));
+  handle('xumu:close-account', accountId => coordinator.run(()=>sessions.close(accountId)));
+  handle('xumu:connection', accountId => coordinator.run(()=>sessions.refresh(accountId)));
+  handle('xumu:publish-review',input=>publishing.reviewPublish(input));
+  handle('xumu:publish-start',input=>publishing.startPublish(input));
+  handle('xumu:publish-pause',batchId=>publishing.pausePublishing(batchId));
+  handle('xumu:publish-batch',batchId=>publishing.getPublishingBatch(batchId));
+  handle('xumu:publish-batches',()=>publishing.getPublishingBatches());
+  handle('xumu:publish-details',taskId=>publishing.getPublishTaskDetails(taskId));
+  handle('xumu:publish-recheck',taskId=>publishing.recheckPublish(taskId));
+  handle('xumu:publish-open-page',taskId=>publishing.openPublishPage(taskId));
+  handle('xumu:publish-manual-check',input=>publishing.recordPublishCheck(input));
+  handle('xumu:publish-update-draft',input=>publishing.updatePublishDraft(input));
+  handle('xumu:publish-repost-draft',input=>publishing.createRepostDraft(input));
   handle('xumu:update-asset', (assetId, input) => repository.updateAsset(assetId,input));
   handle('xumu:import-videos', async () => {
     const result=await dialog.showOpenDialog(window,{title:'导入本地视频',properties:['openFile','multiSelections'],filters:[{name:'视频文件',extensions:['mp4','mov']}]});

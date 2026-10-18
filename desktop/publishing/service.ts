@@ -151,6 +151,7 @@ export class PublishingService {
   }
   async pausePublishing(batchId:string):Promise<PublishBatch>{this.requireOpen();return this.store.pauseBatch(batchId);}
   getPublishingBatch(batchId:string):PublishBatch{return this.store.getBatch(batchId);}
+  getPublishingBatches():PublishBatch[]{return this.store.listBatches();}
   getPublishTaskDetails(taskId:string):PublishTaskDetails{return this.store.getDetails(taskId);}
   recordPublishCheck(input:ManualCheckInput):PublishTaskDetails{this.requireOpen();return this.store.recordManualCheck(input);}
   async updatePublishDraft(input:PublishDraftInput):Promise<DesktopTask>{

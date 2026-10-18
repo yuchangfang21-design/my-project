@@ -5,10 +5,16 @@ import { Repository } from './storage/repository.js';
 import { registerIpc } from './ipc.js';
 import { MediaLibrary } from './media/library.js';
 import { SessionManager } from './browser/session-manager.js';
+import { PublishingService } from './publishing/service.js';
+import { OperationCoordinator } from './publishing/coordinator.js';
+import { UnverifiedPublishAdapter } from './publishing/adapter.js';
 let repository: Repository;
 let sessions: SessionManager;
 let media: MediaLibrary;
+let publishing:PublishingService;
+let coordinator:OperationCoordinator;
 let quitting = false;
+let quitReady=false;
 
 const dataOverride=app.commandLine.getSwitchValue('user-data-dir') || (!app.isPackaged?process.env.XUMU_DATA_DIR:undefined);
 if(dataOverride){if(!isAbsolute(dataOverride))throw new Error('数据目录必须是绝对路径');mkdirSync(dataOverride,{recursive:true});app.setPath('userData',dataOverride);}
@@ -28,15 +34,20 @@ if (primaryInstance) app.whenReady().then(async () => {
   media = new MediaLibrary(app.getPath('userData'),repository); await media.initialize();
   if (quitting) return;
   sessions = new SessionManager(join(app.getPath('userData'),'profiles'),repository);
+  coordinator=new OperationCoordinator();
+  publishing=new PublishingService(repository.publishing,repository,media,sessions,coordinator,new UnverifiedPublishAdapter());
   ipcMain.handle('xumu:runtime', event => {
     if (event.senderFrame !== event.sender.mainFrame || !BrowserWindow.fromWebContents(event.sender)) throw new Error('不允许的调用来源');
     return { mode: 'desktop', version: app.getVersion() };
   });
-  registerIpc(createDesktopWindow(), repository, media, sessions);
-  app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) registerIpc(createDesktopWindow(), repository, media, sessions); });
+  registerIpc(createDesktopWindow(), repository, media, sessions,publishing,coordinator);
+  app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) registerIpc(createDesktopWindow(), repository, media, sessions,publishing,coordinator); });
 }).catch(error => { if (!quitting) { dialog.showErrorBox('序幕启动失败', String(error.message || error)); app.exit(1); } });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('before-quit',event=>{
-  if(quitting)return;event.preventDefault();quitting=true;
-  void Promise.allSettled([media?.close(),sessions?.closeAll()]).then(()=>{repository?.close();app.quit();});
+  if(quitReady)return;event.preventDefault();if(quitting)return;quitting=true;
+  void (async()=>{
+    for(const cleanup of[()=>publishing?.close(),()=>coordinator?.close(),()=>sessions?.closeAll(),()=>media?.close()])await Promise.resolve().then(cleanup).catch(()=>undefined);
+    repository?.close();quitReady=true;app.quit();
+  })();
 });

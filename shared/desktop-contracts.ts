@@ -19,5 +19,16 @@ export interface DesktopApi {
   openAccount(accountId: string): Promise<LoginObservation>;
   closeAccount(accountId: string): Promise<void>;
   getConnection(accountId: string): Promise<LoginObservation>;
+  reviewPublish(input:{taskIds:string[]}):Promise<import('./publishing-contracts.js').PublishReview>;
+  startPublish(input:{reviewId:string}):Promise<import('./publishing-contracts.js').PublishBatch>;
+  pausePublishing(batchId:string):Promise<import('./publishing-contracts.js').PublishBatch>;
+  getPublishingBatch(batchId:string):Promise<import('./publishing-contracts.js').PublishBatch>;
+  getPublishingBatches():Promise<import('./publishing-contracts.js').PublishBatch[]>;
+  getPublishTaskDetails(taskId:string):Promise<import('./publishing-contracts.js').PublishTaskDetails>;
+  recheckPublish(taskId:string):Promise<import('./publishing-contracts.js').PublishTaskDetails>;
+  openPublishPage(taskId:string):Promise<void>;
+  recordPublishCheck(input:import('./publishing-contracts.js').ManualCheckInput):Promise<import('./publishing-contracts.js').PublishTaskDetails>;
+  updatePublishDraft(input:import('./publishing-contracts.js').PublishDraftInput):Promise<DesktopTask>;
+  createRepostDraft(input:import('./publishing-contracts.js').RepostDraftInput):Promise<DesktopTask>;
 }
 declare global { interface Window { xumu?: DesktopApi } }

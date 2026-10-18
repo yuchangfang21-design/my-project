@@ -109,6 +109,9 @@ export class PublishStore {
     const row=this.db.prepare('SELECT data FROM publish_batches WHERE id=?').get(id(batchId)) as any;
     if(!row)throw new Error('发布批次不存在');return JSON.parse(row.data);
   }
+  listBatches():PublishBatch[]{
+    return (this.db.prepare("SELECT data FROM publish_batches WHERE json_extract(data,'$.state')!='completed' OR id IN(SELECT id FROM publish_batches WHERE json_extract(data,'$.state')='completed' ORDER BY rowid DESC LIMIT 20) ORDER BY rowid DESC").all() as {data:string}[]).map(row=>JSON.parse(row.data));
+  }
   private writeBatch(batch:PublishBatch):PublishBatch { this.db.prepare('UPDATE publish_batches SET data=? WHERE id=?').run(JSON.stringify(batch),batch.id);return batch; }
   findBatchForReview(reviewId:string):PublishBatch|null{
     const row=this.db.prepare('SELECT data FROM publish_batches WHERE review_id=?').get(id(reviewId)) as any;

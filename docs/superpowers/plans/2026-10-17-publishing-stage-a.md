@@ -1,6 +1,8 @@
 # Publishing Stage A Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. The user has already selected native execution; do not ask them to choose an execution method again.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking. The user has already selected native execution; do not ask them to choose an execution method again.
+
+**执行记录（2026-10-18）：** 任务 1—5 已实现，任务 6 的离线打包、截图和独立复查已完成；官方站点代理 403，Windows 原生安装与真实发布未执行，生产适配器继续禁用。详见 [本阶段交付记录](../../publishing-stage-a-delivery.md)。
 
 **Goal:** 在现有 Windows 桌面版中实现发布准备、逐任务确认、串行执行与中断恢复；只有真实站点能力经过验证后才启用远端发布。
 
@@ -107,11 +109,11 @@ type PublishTaskDetails = {
 
 **Interfaces:** `migrateDatabase(db: Database.Database, dataDir: string): void`；`PublishStore(db: Database.Database)` 提供 `listTasks(): DesktopTask[]`、`getDetails(taskId): PublishTaskDetails`、`createTasks(input: CreateTasksInput): DesktopTask[]`、`updateDraft(input: PublishDraftInput): DesktopTask`、`cancelTask(taskId): void`、`recoverInterrupted(): void`。Repository 在建库后持有 `publishing: PublishStore`，原任务方法委托它；账号和素材接口保持原样。
 
-- [ ] **Step 1: 写迁移与修订失败测试。** 在实际 Electron 主进程中创建 schema 1 的账号、素材、pending/cancelled 任务和事件，包含非空 WAL；迁移后断言 `expect(result.ids).toEqual(oldIds)`、`expect(result.revisions).toEqual([1,1])`、`expect(result.eventsPreserved).toBe(true)`。修改素材标题不得改变任务标题；正确修订编辑一次后 `expect(next.revision).toBe(2)`，旧 expectedRevision 再次编辑必须拒绝。
-- [ ] **Step 2: 运行 RED。** `npm run test:desktop -- --grep 'publishing storage'`；应因新存储或迁移不存在失败，不把启动环境错误当作预期 RED。
-- [ ] **Step 3: 实现迁移与事务。** 迁移前用 SQLite 一致性序列化写唯一备份，权限 0600；不能简单复制可能缺 WAL 的主文件。重建 tasks 表以扩展 CHECK，保留 task_events 外键与事件 ID，新增 publish_batches、publish_attempts、publish_manual_checks。旧任务补 revision=1、description=''、tags=[] 和素材指纹。关闭外键仅覆盖受控迁移，事务内在重建后检查 foreign_key_check，失败回滚；finally 恢复外键。新库直接建立 schema 2，版本大于 2 拒绝写入。编辑仅允许 pending/failed 且尚未提交的任务，title 1—100、description 0—2000、tags 最多 10 项且每项 1—30；这些是本地约束，站点限制另行验证。
-- [ ] **Step 4: 验证失败路径。** 备份位置不可写、故意违反外键、迁移中抛错均拒绝启动写入，原库可读且记录不丢；未来 schema 文件字节保持不变；foreign_keys 仍开启。迁移前 pending/cancelled 的读取与原测试相同。运行上述测试及原 `storage.spec.ts` 全部通过。
-- [ ] **Step 5: 提交。** `git commit -m "feat: persist publishing revisions and recoverable attempts"`。
+- [x] **Step 1: 写迁移与修订失败测试。** 在实际 Electron 主进程中创建 schema 1 的账号、素材、pending/cancelled 任务和事件，包含非空 WAL；迁移后断言 `expect(result.ids).toEqual(oldIds)`、`expect(result.revisions).toEqual([1,1])`、`expect(result.eventsPreserved).toBe(true)`。修改素材标题不得改变任务标题；正确修订编辑一次后 `expect(next.revision).toBe(2)`，旧 expectedRevision 再次编辑必须拒绝。
+- [x] **Step 2: 运行 RED。** `npm run test:desktop -- --grep 'publishing storage'`；应因新存储或迁移不存在失败，不把启动环境错误当作预期 RED。
+- [x] **Step 3: 实现迁移与事务。** 迁移前用 SQLite 一致性序列化写唯一备份，权限 0600；不能简单复制可能缺 WAL 的主文件。重建 tasks 表以扩展 CHECK，保留 task_events 外键与事件 ID，新增 publish_batches、publish_attempts、publish_manual_checks。旧任务补 revision=1、description=''、tags=[] 和素材指纹。关闭外键仅覆盖受控迁移，事务内在重建后检查 foreign_key_check，失败回滚；finally 恢复外键。新库直接建立 schema 2，版本大于 2 拒绝写入。编辑仅允许 pending/failed 且尚未提交的任务，title 1—100、description 0—2000、tags 最多 10 项且每项 1—30；这些是本地约束，站点限制另行验证。
+- [x] **Step 4: 验证失败路径。** 备份位置不可写、故意违反外键、迁移中抛错均拒绝启动写入，原库可读且记录不丢；未来 schema 文件字节保持不变；foreign_keys 仍开启。迁移前 pending/cancelled 的读取与原测试相同。运行上述测试及原 `storage.spec.ts` 全部通过。
+- [x] **Step 5: 提交。** `git commit -m "feat: persist publishing revisions and recoverable attempts"`。
 
 ### Task 2: 发布尝试与批次的原子事务
 
@@ -119,11 +121,11 @@ type PublishTaskDetails = {
 
 **Interfaces:** 新增 `reserveBatch(reviewId: string, rows: PublishReviewRow[]): PublishBatch`、`beginPreparation(attemptId): void`、`beginSubmit(attemptId): void`、`finishAttempt(attemptId, outcome): void`、`recordReceipt(attemptId, receipt: PublicationReceipt): void`、`pauseBatch(batchId): PublishBatch`、`getBatch(batchId): PublishBatch`、`getAttempt(taskId): AttemptRecord | null`、`recordManualCheck(input): PublishTaskDetails`、`createRepostDraft(input): DesktopTask`。outcome 仅为 `{ kind:'not_submitted'|'review'; errorCode:string }`。人工输入为 taskId、attemptId、result（found/not_found）、note（0—1000）。重发草稿输入为 previousTaskId、expectedRevision、acknowledged（必须 true）。
 
-- [ ] **Step 1: 写原子性与恢复测试。** 同 reviewId 两次预留断言 `expect(second.id).toBe(first.id)`、每个任务仅一个有效尝试；修改修订后整个批次预留失败，零个新尝试。分别在 reserved、preparing、submit_intent 后关闭并重开数据库，断言任务状态为 `['pending','pending','review']`，批次全部 paused，没有自动执行。
-- [ ] **Step 2: 运行 RED。** `npm run test:desktop -- --grep 'publishing attempts'`；应缺少尝试事务方法。
-- [ ] **Step 3: 实现状态机。** 批次以 reviewId 唯一去重；预留、确认快照和尝试原子写入。只允许 reserved → preparing → submit_intent → finished；beginSubmit 同事务写持久事件后才返回。取消只适用于未开始或 reserved 的任务；进入 submit_intent 后拒绝取消。恢复与结果核对都追加事件，不覆盖历史。错误摘要只使用固定错误类别，不保存原始页面文本或凭据。
-- [ ] **Step 4: 实现结果约束。** 回执账号必须匹配尝试目标；作品 ID 已知后，后续回执必须是同一作品。存储层只接受非空作品 ID、合法时间及 HTTPS 官方 URL，无用户信息或外域跳转；初始主机集合仅含已知官方 creator.douyin.com，实际作品域名或路径只能由任务 6 的证据扩展。pending_review → submitted，published → published，rejected/restricted → rejected。同标题不是唯一证据。人工 found 保持 review 并显示人工标记；not_found 不自动执行，只有后续新的核对确认可建立新尝试。已提交历史不能被普通 createTasks 或重试绕过；新重发草稿只允许来源 published/rejected 且 acknowledged=true，保留 repostOf，仍需新确认。对 submitted/review 禁止重发草稿。测试 `expect(manual.task.status).toBe('review')` 与 `expect(repost.repostOf).toBe(previous.id)`。
-- [ ] **Step 5: 运行 GREEN 并提交。** attempts、storage 及原存储测试通过后提交 `feat: make publishing attempts idempotent and crash recoverable`。
+- [x] **Step 1: 写原子性与恢复测试。** 同 reviewId 两次预留断言 `expect(second.id).toBe(first.id)`、每个任务仅一个有效尝试；修改修订后整个批次预留失败，零个新尝试。分别在 reserved、preparing、submit_intent 后关闭并重开数据库，断言任务状态为 `['pending','pending','review']`，批次全部 paused，没有自动执行。
+- [x] **Step 2: 运行 RED。** `npm run test:desktop -- --grep 'publishing attempts'`；应缺少尝试事务方法。
+- [x] **Step 3: 实现状态机。** 批次以 reviewId 唯一去重；预留、确认快照和尝试原子写入。只允许 reserved → preparing → submit_intent → finished；beginSubmit 同事务写持久事件后才返回。取消只适用于未开始或 reserved 的任务；进入 submit_intent 后拒绝取消。恢复与结果核对都追加事件，不覆盖历史。错误摘要只使用固定错误类别，不保存原始页面文本或凭据。
+- [x] **Step 4: 实现结果约束。** 回执账号必须匹配尝试目标；作品 ID 已知后，后续回执必须是同一作品。存储层只接受非空作品 ID、合法时间及 HTTPS 官方 URL，无用户信息或外域跳转；初始主机集合仅含已知官方 creator.douyin.com，实际作品域名或路径只能由任务 6 的证据扩展。pending_review → submitted，published → published，rejected/restricted → rejected。同标题不是唯一证据。人工 found 保持 review 并显示人工标记；not_found 不自动执行，只有后续新的核对确认可建立新尝试。已提交历史不能被普通 createTasks 或重试绕过；新重发草稿只允许来源 published/rejected 且 acknowledged=true，保留 repostOf，仍需新确认。对 submitted/review 禁止重发草稿。测试 `expect(manual.task.status).toBe('review')` 与 `expect(repost.repostOf).toBe(previous.id)`。
+- [x] **Step 5: 运行 GREEN 并提交。** attempts、storage 及原存储测试通过后提交 `feat: make publishing attempts idempotent and crash recoverable`。
 
 ### Task 3: 当前账号页面、能力观察与默认禁用适配器
 
@@ -140,11 +142,11 @@ type PublishTaskDetails = {
 
 适配器另有只读属性 `worksUrl: string | null`；默认 null，只有经过实测的官方作品列表入口才赋值。操作只在服务或 IPC 最外层获取一次 coordinator，withAccountPage 内不再次排队，避免嵌套等待。
 
-- [ ] **Step 1: 写边界测试。** 用既有实际 Chromium + 本地页面夹具，两个账号 contextId 不同，关闭重开同账号获得新 ID；观察不到身份或能力时没有 prepare/submit 调用。串行启动两个延迟动作，断言 `expect(maxConcurrent).toBe(1)`。素材在核对后被修改应拒绝 verifiedPath；同指纹修复后的副本可以使用新受管路径。
-- [ ] **Step 2: 运行 RED。** `npm run test:desktop -- --grep 'publishing boundaries'`；应缺少新边界接口。
-- [ ] **Step 3: 实现主进程边界。** withAccountPage 复用原配置，页面不存在时返回可识别错误；contextId 与账号映射只由主进程生成。操作队列不提供任意脚本接口，登录核实动作与发布页面导航也经过同一协调器。默认 UnverifiedPublishAdapter 的 observe 返回 canPublish=false 和原因，其他方法明确拒绝；它不能因持久化 logged_in 或环境变量而启用。
-- [ ] **Step 4: 验证 GREEN。** 模拟同一账号切换身份、context 关闭、排队期间退出、缺少浏览器，均不写入远端；测试适配器只由测试中的内部依赖注入，不添加产品开关或 preload 注入通道。
-- [ ] **Step 5: 提交。** `git commit -m "feat: isolate publication capability and account operation boundaries"`。
+- [x] **Step 1: 写边界测试。** 用既有实际 Chromium + 本地页面夹具，两个账号 contextId 不同，关闭重开同账号获得新 ID；观察不到身份或能力时没有 prepare/submit 调用。串行启动两个延迟动作，断言 `expect(maxConcurrent).toBe(1)`。素材在核对后被修改应拒绝 verifiedPath；同指纹修复后的副本可以使用新受管路径。
+- [x] **Step 2: 运行 RED。** `npm run test:desktop -- --grep 'publishing boundaries'`；应缺少新边界接口。
+- [x] **Step 3: 实现主进程边界。** withAccountPage 复用原配置，页面不存在时返回可识别错误；contextId 与账号映射只由主进程生成。操作队列不提供任意脚本接口，登录核实动作与发布页面导航也经过同一协调器。默认 UnverifiedPublishAdapter 的 observe 返回 canPublish=false 和原因，其他方法明确拒绝；它不能因持久化 logged_in 或环境变量而启用。
+- [x] **Step 4: 验证 GREEN。** 模拟同一账号切换身份、context 关闭、排队期间退出、缺少浏览器，均不写入远端；测试适配器只由测试中的内部依赖注入，不添加产品开关或 preload 注入通道。
+- [x] **Step 5: 提交。** `git commit -m "feat: isolate publication capability and account operation boundaries"`。
 
 ### Task 4: 核对清单、执行、暂停与结果复核
 
@@ -152,11 +154,11 @@ type PublishTaskDetails = {
 
 **Interfaces:** `PublishingService(store, repository, media, sessions, coordinator, adapter, now?: () => number)` 提供 `reviewPublish(input: { taskIds: string[] }): Promise<PublishReview>`、`startPublish(input: { reviewId: string }): Promise<PublishBatch>`、`pausePublishing(batchId): Promise<PublishBatch>`、`getPublishingBatch(batchId): PublishBatch`、`getPublishTaskDetails(taskId): PublishTaskDetails`、`recheckPublish(taskId): Promise<PublishTaskDetails>`、`openPublishPage(taskId): Promise<void>`、`recordPublishCheck(input): PublishTaskDetails`、`close(): Promise<void>`。草稿编辑与重发方法使用任务 1、2 的输入，服务额外校验素材可用。openPublishPage 在该账号上下文中打开已验证回执 URL 或 worksUrl；都不可用时明确拒绝并显示入口待验证，不把创作者首页假称作品页。
 
-- [ ] **Step 1: 写核对测试。** 三个任务分别为就绪、未登录、素材缺失，断言 `expect(review.rows).toHaveLength(3)` 且 readyTaskIds 只有一个；默认适配器下所有行有“发布接入待验证”阻塞。用注入时钟推进到 5 分钟后，startPublish 拒绝；任一就绪项修订或指纹变化时本次启动整体拒绝，不能悄悄发布剩余项。
-- [ ] **Step 2: 运行 RED。** `npm run test:desktop -- --grep 'publishing service'`。
-- [ ] **Step 3: 实现确认与执行。** taskIds 必须为 1—100 个不同且存在的 UUID，重复、未知或非数组输入拒绝；清单保留输入顺序。核对 ID 在主进程保存不可由 renderer 改写的完整清单，5 分钟期限从清单生成完成时开始；启动只接受 reviewId，renderer 不能传入“已核实身份”或替换行。过期前重复启动返回同批次。启动原子预留后逐条执行；prepare 前与 beginSubmit 前分别重新观察实时身份、能力版本及 contextId，并检查当前素材指纹。检查成功后先写 beginSubmit，再调用 submit。历史身份或旧能力观察不替代实时检查。
-- [ ] **Step 4: 实现错误与暂停。** submit_intent 之前可证明未提交的失败记 not_submitted；marker 之后异常、null 回执或无法唯一关联的结果一律 review，立即暂停整个批次。pause 只阻止后续任务，不能清除提交标记；暂停时只读 recheck 仍可进入全局串行队列。退出先停止调度，未提交阶段请求中止，提交阶段等待已开始调用返回或其已验证超时，再保留可恢复状态，不关闭数据库在前。超时不能仅用 Promise.race 留下仍会写入的后台操作：持久记录不确定结果后关闭该账号上下文，确认动作已结束才能释放操作队列。默认未验证适配器不存在远端调用。
-- [ ] **Step 5: 写关键回归并运行 GREEN。** 连续启动仅一次 submit；第一条不确定时第二条 submit 为 0；平台仅提示“成功”但无回执仍 review；pending_review 显示 submitted；readResult 不调用 submit；人工记录不产生 published；暂停后可用新核对排除 review 再恢复其他任务；账号在 prepare 后变化时 submit 为 0。所有服务与边界测试通过后提交 `feat: coordinate confirmed publishing with conservative result recovery`。
+- [x] **Step 1: 写核对测试。** 三个任务分别为就绪、未登录、素材缺失，断言 `expect(review.rows).toHaveLength(3)` 且 readyTaskIds 只有一个；默认适配器下所有行有“发布接入待验证”阻塞。用注入时钟推进到 5 分钟后，startPublish 拒绝；任一就绪项修订或指纹变化时本次启动整体拒绝，不能悄悄发布剩余项。
+- [x] **Step 2: 运行 RED。** `npm run test:desktop -- --grep 'publishing service'`。
+- [x] **Step 3: 实现确认与执行。** taskIds 必须为 1—100 个不同且存在的 UUID，重复、未知或非数组输入拒绝；清单保留输入顺序。核对 ID 在主进程保存不可由 renderer 改写的完整清单，5 分钟期限从清单生成完成时开始；启动只接受 reviewId，renderer 不能传入“已核实身份”或替换行。过期前重复启动返回同批次。启动原子预留后逐条执行；prepare 前与 beginSubmit 前分别重新观察实时身份、能力版本及 contextId，并检查当前素材指纹。检查成功后先写 beginSubmit，再调用 submit。历史身份或旧能力观察不替代实时检查。
+- [x] **Step 4: 实现错误与暂停。** submit_intent 之前可证明未提交的失败记 not_submitted；marker 之后异常、null 回执或无法唯一关联的结果一律 review，立即暂停整个批次。pause 只阻止后续任务，不能清除提交标记；暂停时只读 recheck 仍可进入全局串行队列。退出先停止调度，未提交阶段请求中止，提交阶段等待已开始调用返回或其已验证超时，再保留可恢复状态，不关闭数据库在前。超时不能仅用 Promise.race 留下仍会写入的后台操作：持久记录不确定结果后关闭该账号上下文，确认动作已结束才能释放操作队列。默认未验证适配器不存在远端调用。
+- [x] **Step 5: 写关键回归并运行 GREEN。** 连续启动仅一次 submit；第一条不确定时第二条 submit 为 0；平台仅提示“成功”但无回执仍 review；pending_review 显示 submitted；readResult 不调用 submit；人工记录不产生 published；暂停后可用新核对排除 review 再恢复其他任务；账号在 prepare 后变化时 submit 为 0。所有服务与边界测试通过后提交 `feat: coordinate confirmed publishing with conservative result recovery`。
 
 ### Task 5: 接入已确认的发布界面与受限 IPC
 
@@ -164,11 +166,11 @@ type PublishTaskDetails = {
 
 **Interfaces:** DesktopApi 逐一暴露任务 4 的具名业务方法（不暴露 close），同步读取也包装为 Promise；另加 `updatePublishDraft(input: PublishDraftInput): Promise<DesktopTask>` 与 `createRepostDraft(input): Promise<DesktopTask>`。registerIpc 扩展参数为 window、repository、media、sessions、publishing、coordinator；open-account、connection 和 close-account 的整次动作也经过 coordinator，服务内部不重复获取它。全部 IPC 继续验证当前窗口主框架和拒绝多余字段，禁止 renderer 指定结果状态或伪造回执。getSnapshot 返回新版真实任务，usePublishing 使用请求序号隔离过期响应；描述、标签、修订字段仅桌面任务必填，旧 HTML 演示继续使用原数据验证和演示行为。
 
-- [ ] **Step 1: 写 UI 失败测试。** 实际 Electron 中创建账号与视频，进入发布页编辑该账号文案、刷新后仍保留。打开核对清单必须显示所有阻塞项、目标身份与完整文本；正式默认适配器下确认按钮禁用且显示具体原因，没有虚构成功状态。服务错误后输入保留，连续点击不创建重复批次。
-- [ ] **Step 2: 运行 RED。** `npm run test:desktop -- --grep 'publishing UI'`。
-- [ ] **Step 3: 接入页面。** 按已提交的三张效果稿中的发布与恢复两张布局实现，桌面任务从 App 内联页抽出，保留原 HTML 演示页。详情展示 submitted/review/published 等真实状态、脱敏时间线、官方页面入口和人工核对。人工 found 标明“人工记录已找到”，不能显示自动已发布；not_found 后新启动必须再次完整确认。平台能力未接通时编辑和本地保存可用，远端启动不可用。
-- [ ] **Step 4: 完成窗口与键盘验证。** 在 1440 × 1000、1280 × 900、960 × 700 验证无整页横向溢出；不足 1200 时详情使用抽屉，焦点可进入、关闭后返回触发项。确认弹层键盘循环和 Escape 有效，长文案不被截断，标签和消息正文按文本显示。更新桌面状态类型时运行旧演示 10 项测试，不能把真实 submitted 状态写进演示缓存。
-- [ ] **Step 5: 回归并提交。** `npm test` 与 `npm run test:desktop` 完整通过后提交 `feat: connect publication review and recovery desktop screens`。截图必须取自实际桌面，不以静态设计稿冒充实现结果。
+- [x] **Step 1: 写 UI 失败测试。** 实际 Electron 中创建账号与视频，进入发布页编辑该账号文案、刷新后仍保留。打开核对清单必须显示所有阻塞项、目标身份与完整文本；正式默认适配器下确认按钮禁用且显示具体原因，没有虚构成功状态。服务错误后输入保留，连续点击不创建重复批次。
+- [x] **Step 2: 运行 RED。** `npm run test:desktop -- --grep 'publishing UI'`。
+- [x] **Step 3: 接入页面。** 按已提交的三张效果稿中的发布与恢复两张布局实现，桌面任务从 App 内联页抽出，保留原 HTML 演示页。详情展示 submitted/review/published 等真实状态、脱敏时间线、官方页面入口和人工核对。人工 found 标明“人工记录已找到”，不能显示自动已发布；not_found 后新启动必须再次完整确认。平台能力未接通时编辑和本地保存可用，远端启动不可用。
+- [x] **Step 4: 完成窗口与键盘验证。** 在 1440 × 1000、1280 × 900、960 × 700 验证无整页横向溢出；不足 1200 时详情使用抽屉，焦点可进入、关闭后返回触发项。确认弹层键盘循环和 Escape 有效，长文案不被截断，标签和消息正文按文本显示。更新桌面状态类型时运行旧演示 10 项测试，不能把真实 submitted 状态写进演示缓存。
+- [x] **Step 5: 回归并提交。** `npm test` 与 `npm run test:desktop` 完整通过后提交 `feat: connect publication review and recovery desktop screens`。截图必须取自实际桌面，不以静态设计稿冒充实现结果。
 
 ### Task 6: 真实站点能力验证、Windows 构建和交付记录
 
@@ -176,11 +178,11 @@ type PublishTaskDetails = {
 
 **Interfaces:** 验证后的适配器实现任务 3 的全部接口；与当前浏览器 context、远端身份、固定官方域名和已验证页面版本绑定。未验证时 main 继续选用 UnverifiedPublishAdapter；不得通过配置伪造 canPublish=true。
 
-- [ ] **Step 1: 检查官方页面前提。** 仅做读操作确认可访问性，分别记录身份依据、上传与提交控件、官方回执及作品结果。若站点仍受阻，明确记录“未执行真实发布”，保留默认禁用适配器，继续独立的打包与离线验证，不编造 DOM 选择器。
-- [ ] **Step 2: 仅在证据可用时接入适配器。** 先基于去除敏感内容的最小页面夹具写失败测试，再实现已核实的身份观察、prepare、submit 和只读结果检查。仅接受准确的作品标识及预期账号；URL 必须为实测官方 HTTPS 主机、无用户信息、无外域跳转，不能盲目打开任意回执链接。未知结果继续 review。
+- [x] **Step 1: 检查官方页面前提。** 仅做读操作确认可访问性，分别记录身份依据、上传与提交控件、官方回执及作品结果。若站点仍受阻，明确记录“未执行真实发布”，保留默认禁用适配器，继续独立的打包与离线验证，不编造 DOM 选择器。
+- [x] **Step 2: 仅在证据可用时接入适配器。** 先基于去除敏感内容的最小页面夹具写失败测试，再实现已核实的身份观察、prepare、submit 和只读结果检查。仅接受准确的作品标识及预期账号；URL 必须为实测官方 HTTPS 主机、无用户信息、无外域跳转，不能盲目打开任意回执链接。未知结果继续 review。
 - [ ] **Step 3: Windows 逐步验收。** 用户在自己的 Windows 官方页面扫码并主动确认一条测试素材；验证提交、审核状态、作品结果，然后两个自有账号隔离与串行批次。再验证扫码中断、账号切换、提交前退出、提交后连接中断与手工核对。实际发出的测试内容和是否删除由用户在自己设备上决定；云端不代发。
 - [ ] **Step 4: 打包与既有环境回归。** Linux 先运行实际 Electron 全部测试与打包版启动；Windows 原生工作流运行全套测试、NSIS 构建、打包版数据库迁移及重启。只有成功运行出现安装包产物后才提供对应下载链接，未签名状态如实记录。
-- [ ] **Step 5: 独立审阅和交付。** 代码完成后按执行技能做一次整体审阅，修复经确认的重要问题并重跑受影响测试。提交并推送源码、实际截图与交付记录到 my-project，必要时显式触发新的 Windows 构建标签。分别报告发布核心、真实身份、实际发布、Windows 安装、评论、私信的状态。
+- [x] **Step 5: 独立审阅和交付。** 代码完成后按执行技能做一次整体审阅，修复经确认的重要问题并重跑受影响测试。提交并推送源码、实际截图与交付记录到 my-project，必要时显式触发新的 Windows 构建标签。分别报告发布核心、真实身份、实际发布、Windows 安装、评论、私信的状态。
 
 ## 计划自查与执行交接
 

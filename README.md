@@ -26,7 +26,7 @@ Windows 原生构建入口是仓库 Actions 的 **Build Windows desktop**。安�
 
 [打开 Windows 构建页面](https://github.com/yuchangfang21-design/my-project/actions/workflows/windows-build.yml) · [桌面实机运行截图](https://github.com/yuchangfang21-design/my-project/blob/preview/xumu-demo/artifacts/desktop-overview.png) · [本阶段交付与验证记录](docs/publishing-stage-a-delivery.md)
 
-最新云端结果：浏览器 10 项、实际 Electron 31 项、Linux 打包版 2 项测试通过；Windows 原生构建与安装结果仍需在对应平台确认。
+最新云端结果：浏览器 10 项、实际 Electron 37 项、Linux 打包版 2 项测试通过；Windows 原生构建与安装结果仍需在对应平台确认。
 
 本阶段已实现：独立发布文案与修订、完整核对清单、串行执行与提交前记录、不确定结果暂停及重启恢复。生产适配器保持禁用；核对页会显示“发布接入待验证”，不会上传或发布真实内容。
 

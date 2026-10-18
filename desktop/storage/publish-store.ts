@@ -78,6 +78,19 @@ export class PublishStore {
   private writeAttempt(attempt:AttemptRecord):void {
     this.db.prepare('UPDATE publish_attempts SET data=?,phase=?,outcome=? WHERE id=?').run(JSON.stringify(attempt),attempt.phase,attempt.outcome,attempt.id);
   }
+  hasConflictingSubmissionHistory(taskId:string):boolean {
+    const task=this.task(taskId);
+    const siblings=this.db.prepare("SELECT id,status FROM tasks WHERE account_id=? AND asset_id=? AND id!=? AND status IN ('submitted','published','review','rejected')").all(task.accountId,task.assetId,task.id) as {id:string;status:string}[];
+    if(!siblings.length)return false;
+    const intent=task.repostOf?this.db.prepare("SELECT id FROM task_events WHERE task_id=? AND kind='repost_created' ORDER BY id LIMIT 1").get(task.id) as {id:number}|undefined:undefined;
+    return siblings.some(sibling=>{
+      if(!intent||['submitted','review'].includes(sibling.status))return true;
+      // Only a deliberate repost created after the known submission covers that history.
+      // Event IDs preserve transaction order without depending on the device clock.
+      const marker=this.db.prepare("SELECT MAX(id) AS id FROM task_events WHERE task_id=? AND kind='submit_intent'").get(sibling.id) as {id:number|null};
+      return marker.id===null||marker.id>=intent.id;
+    });
+  }
   reserveBatch(reviewId:string,rows:PublishReviewRow[]):PublishBatch {
     id(reviewId);
     if(!Array.isArray(rows)||!rows.length||rows.length>100||new Set(rows.map(r=>r.taskId)).size!==rows.length)throw new Error('发布清单无效');
@@ -86,6 +99,7 @@ export class PublishStore {
       if(existing){const batch:PublishBatch=JSON.parse(existing.data);if(JSON.stringify(batch.taskIds)!==JSON.stringify(rows.map(r=>r.taskId)))throw new Error('确认清单不一致');return batch;}
       for(const row of rows){
         const task=this.task(row.taskId),details=this.getDetails(task.id),prior=this.getAttempt(task.id);
+        if(this.hasConflictingSubmissionHistory(task.id))throw new Error('同一账号和素材已有提交或待核对历史，请查看最新任务并明确创建新的发布意图');
         const reviewedAbsence=task.status==='review' && prior?.phase==='finished' && prior.outcome==='review' && details.manualCheck?.result==='not_found';
         if(!['pending','failed','waiting_login'].includes(task.status)&&!reviewedAbsence)throw new Error('当前任务不能发布，请先核对结果');
         if(prior && prior.phase!=='finished')throw new Error('任务已有活动的执行尝试');

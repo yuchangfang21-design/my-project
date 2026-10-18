@@ -34,11 +34,12 @@ export default function DesktopPublishingPage({api,onChanged,onCreate,changeSign
   return()=>{detailTicket.current++;};
  },[api,selectedId,snapshot.tasks]);
  const runningKey=batches.filter(b=>b.state==='running').map(b=>b.id).join(',');
+ const hasExecutingTasks=snapshot.tasks.some(task=>task.status==='running');
  useEffect(()=>{
-  if(!runningKey)return;let live=true,polling=false;
+  if(!runningKey&&!hasExecutingTasks)return;let live=true,polling=false;
   const timer=setInterval(()=>{if(polling)return;polling=true;void refreshBatches().then(()=>{if(live){void pub.refresh().catch(()=>undefined);void onChanged().catch(()=>undefined);}}).catch(()=>undefined).finally(()=>{polling=false;});},900);
   return()=>{live=false;clearInterval(timer);};
- },[runningKey,pub.refresh,onChanged,refreshBatches]);
+ },[runningKey,hasExecutingTasks,pub.refresh,onChanged,refreshBatches]);
  async function requestReview(ids=selected){const next=await pub.command(()=>api.reviewPublish({taskIds:ids}));if(next)setReview(next);}
  async function startReview(){if(!review)return;const reviewId=review.id;const next=await pub.command(()=>api.startPublish({reviewId}));if(next){batchTicket.current++;setBatches(list=>[next,...list.filter(b=>b.id!==next.id)]);setReview(current=>current?.id===reviewId?null:current);}}
  function selectTask(id:string){setSelectedId(id);setDetailsOpen(true);}
@@ -60,6 +61,6 @@ export default function DesktopPublishingPage({api,onChanged,onCreate,changeSign
  <div className="pub-list-footer"><ShieldCheck size={14}/>能力尚未验证的账号不能发布；上传完成不等于已发布。</div></section>
  {!narrow&&<aside className="panel pub-details-panel" aria-label="任务详情"><header className="pub-detail-heading"><h2>任务详情</h2><span>本机记录</span></header>{detailContent}</aside>}
  </div>{narrow&&detailsOpen&&<Drawer onClose={()=>setDetailsOpen(false)}>{detailContent}</Drawer>}
- {review&&<PublishReviewDialog key={review.id} review={review} accounts={snapshot.accounts} busy={pub.busy} onClose={()=>setReview(null)} onStart={()=>void startReview()} onReload={()=>void requestReview(review.rows.map(row=>row.taskId))}/>}
+ {review&&<PublishReviewDialog key={review.id} review={review} accounts={snapshot.accounts} assets={snapshot.assets} busy={pub.busy} onClose={()=>setReview(null)} onStart={()=>void startReview()} onReload={()=>void requestReview(review.rows.map(row=>row.taskId))}/>}
  <div className="bottom-note"><ShieldCheck size={14}/>本地保存不会发布视频。未验证的站点能力保持不可用。</div></div>;
 }

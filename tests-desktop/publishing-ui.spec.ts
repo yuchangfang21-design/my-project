@@ -18,3 +18,36 @@ test('publishing UI ignores stale detail responses when switching account tasks'
 test('publishing UI recovers batch pause controls after leaving the publishing page',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'xumu-batch-controls-'));const app=await launchDesktop(dir);try{await seed(app,dir,2);const batchId=await app.evaluate(async(_e,root)=>{const require=process.getBuiltinModule('module')!.createRequire(process.cwd()+'/package.json');const p=require('node:path'),{randomUUID}=require('node:crypto');const{Repository}=require(p.join(process.cwd(),'dist-desktop/desktop/storage/repository.js'));const repo=new Repository(root);repo.initialize();try{const rows=repo.snapshot().tasks.map((t:any)=>({...t,taskId:t.id,identity:{remoteId:'fixture-'+t.accountId,displayName:'本地夹具身份',observedAt:new Date().toISOString()},contextId:randomUUID(),blockers:[]}));return repo.publishing.reserveBatch(randomUUID(),rows).id;}finally{repo.close();}},dir);const page=await app.firstWindow();const batches=await page.evaluate(()=>window.xumu!.getPublishingBatches());expect(batches.some(b=>b.id===batchId&&b.state==='running')).toBe(true);await page.reload();await page.getByRole('navigation').getByRole('button',{name:'发布任务'}).click();await expect(page.getByRole('button',{name:'暂停后续任务',exact:true})).toBeVisible();await page.getByRole('navigation').getByRole('button',{name:'工作概览'}).click();await page.getByRole('navigation').getByRole('button',{name:'发布任务'}).click();await page.getByRole('button',{name:'暂停后续任务',exact:true}).click();await expect.poll(()=>page.evaluate(async()=>{const batches=await window.xumu!.getPublishingBatches();return batches.find(b=>b.state==='paused')?.state;})).toBe('paused');await expect(page.getByRole('button',{name:'暂停后续任务',exact:true})).toHaveCount(0);}finally{await app.close();await rm(dir,{recursive:true,force:true});}
 });
+for(const result of['published','review']as const)test('publishing review regression refreshes '+result+' while a paused batch finishes its current task',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'xumu-paused-current-ui-'));const app=await launchDesktop(dir);
+ try{
+  const seeded=await seed(app,dir,2);
+  await app.evaluate(async(_e,root)=>{
+   const require=process.getBuiltinModule('module')!.createRequire(process.cwd()+'/package.json'),p=require('node:path'),{randomUUID}=require('node:crypto');
+   const{Repository}=require(p.join(process.cwd(),'dist-desktop/desktop/storage/repository.js'));const repo=new Repository(root);repo.initialize();
+   const tasks=repo.snapshot().tasks,rows=tasks.map((t:any)=>({...t,taskId:t.id,identity:{remoteId:'fixture-'+t.accountId,displayName:'本地夹具身份',observedAt:new Date().toISOString()},contextId:randomUUID(),blockers:[]}));
+   repo.publishing.reserveBatch(randomUUID(),rows);const task=tasks[0],attempt=repo.publishing.getAttempt(task.id);repo.publishing.beginPreparation(attempt.id);repo.publishing.beginSubmit(attempt.id);
+   (globalThis as any).__pausedUi={repo,task,attempt};
+  },dir);
+  const page=await app.firstWindow();await page.reload();await page.getByRole('navigation').getByRole('button',{name:'发布任务'}).click();
+  const active=await app.evaluate(()=> (globalThis as any).__pausedUi.task.id);
+  const account=seeded.accounts.find(a=>a.id===seeded.tasks.find(t=>t.id===active)!.accountId)!;
+  await page.getByRole('row').filter({hasText:account.name}).getByRole('button',{name:'查看任务：待核对的本地作品'}).click();
+  const details=page.getByRole('complementary',{name:'任务详情'});await expect(details.getByText('执行中',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'暂停后续任务',exact:true}).click();await expect(page.getByRole('button',{name:'暂停后续任务',exact:true})).toHaveCount(0);await page.waitForTimeout(1200);
+  await app.evaluate((_e,result)=>{const{repo,task,attempt}=(globalThis as any).__pausedUi;if(result==='published')repo.publishing.recordReceipt(attempt.id,{remoteWorkId:'ui-fixture-work-'+task.id,accountRemoteId:attempt.targetRemoteId,officialUrl:'https://creator.douyin.com/fixture/work/'+task.id,state:'published',observedAt:new Date().toISOString()});else repo.publishing.finishAttempt(attempt.id,{kind:'review',errorCode:'RESULT_UNKNOWN'});},result);
+  await expect(details.getByText(result==='published'?'已发布':'结果待核对',{exact:true})).toBeVisible();await expect(details.getByRole('button',{name:'重新检查结果'})).toBeVisible();
+ }finally{await app.evaluate(()=>{(globalThis as any).__pausedUi?.repo.close();});await app.close();await rm(dir,{recursive:true,force:true});}
+});
+test('publishing review regression distinguishes videos with identical names and copy',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'xumu-review-material-'));const app=await launchDesktop(dir);
+ try{
+  const seeded=await seed(app,dir);const source=join(dir,'second','本机发布测试.mp4');await (await import('node:fs/promises')).mkdir(join(dir,'second'));
+  await writeFile(source,Buffer.concat([Buffer.from('000000186674797069736f6d0000020069736f6d69736f32','hex'),Buffer.from('different local bytes')]));
+  await app.evaluate(({dialog},source)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[source]});},source);
+  const page=await app.firstWindow();const hashes=await page.evaluate(async accountId=>{const api=window.xumu!;await api.importVideos();const s=await api.getSnapshot(),second=s.assets.find(a=>!s.tasks.some(t=>t.assetId===a.id))!;await api.createTasks({assetId:second.id,accountIds:[accountId],title:'待核对的本地作品'});return(await api.getSnapshot()).assets.map(a=>a.sha256);},seeded.accounts[0].id);
+  await page.reload();await page.getByRole('navigation').getByRole('button',{name:'发布任务'}).click();await page.getByLabel('选择当前列表中的可选任务').check();await page.getByRole('button',{name:/核对并启动/}).click();
+  const dialog=page.getByRole('dialog',{name:'发布前核对'});await expect(dialog.getByText('本机发布测试.mp4',{exact:true})).toHaveCount(2);
+  for(const hash of hashes)await expect(dialog.getByText(hash,{exact:true})).toBeAttached();
+ }finally{await app.close();await rm(dir,{recursive:true,force:true});}
+});

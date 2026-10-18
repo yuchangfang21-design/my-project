@@ -55,6 +55,7 @@ export class PublishingService {
     const row:PublishReviewRow={taskId:task.id,revision:task.revision,accountId:task.accountId,assetId:task.assetId,assetSha256:task.assetSha256,title:task.title,description:task.description,tags:[...task.tags],identity:null,contextId:null,blockers:[]};
     if(!['pending','waiting_login','failed'].includes(task.status)&&!(task.status==='review'&&details.manualCheck?.result==='not_found'))row.blockers.push({code:'TASK_STATE',message:'该任务需要先核对已有结果，不能直接发布'});
     if(attempt&&attempt.phase!=='finished')row.blockers.push({code:'ACTIVE_ATTEMPT',message:'该任务已在执行或排队，请先处理当前批次'});
+    if(this.store.hasConflictingSubmissionHistory(task.id))row.blockers.push({code:'SUBMISSION_HISTORY',message:'同一账号和素材已有提交或待核对历史，请查看最新任务并明确创建新的发布意图'});
     try{await this.media.verifiedPath(task.assetId,task.assetSha256);}catch{row.blockers.push({code:'ASSET_UNAVAILABLE',message:'素材文件缺失、损坏或已变化，请重新导入后核对'});}
     let version='unverified';
     try{
@@ -131,11 +132,11 @@ export class PublishingService {
     try{
       this.store.beginPreparation(attempt.id);
       await this.sessions.withAccountPage(attempt.snapshot.accountId,async(page,contextId)=>{
-        await this.checkLive(attempt,page,contextId);
         const file=await this.media.verifiedPath(attempt.snapshot.assetId,attempt.snapshot.assetSha256);
-        await this.bounded(attempt.snapshot.accountId,this.budgets.prepareMs,()=>this.adapter.prepare(page,{file,title:attempt.snapshot.title,description:attempt.snapshot.description,tags:attempt.snapshot.tags},controller.signal));
         await this.checkLive(attempt,page,contextId);
+        await this.bounded(attempt.snapshot.accountId,this.budgets.prepareMs,()=>this.adapter.prepare(page,{file,title:attempt.snapshot.title,description:attempt.snapshot.description,tags:attempt.snapshot.tags},controller.signal));
         await this.media.verifiedPath(attempt.snapshot.assetId,attempt.snapshot.assetSha256);
+        await this.checkLive(attempt,page,contextId);
         this.requireOpen();this.store.beginSubmit(attempt.id);
         const receipt=await this.bounded(attempt.snapshot.accountId,this.budgets.submitMs,()=>this.adapter.submit(page),()=>{
           this.store.finishAttempt(attempt.id,{kind:'review',errorCode:'RESULT_UNKNOWN'});this.store.pauseBatch(batchId);

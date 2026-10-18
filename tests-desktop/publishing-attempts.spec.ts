@@ -25,3 +25,30 @@ test('publishing attempts require matching receipts and separate manual checks f
  return{invalid,submitted,pendingRepost,mismatchedWork,repostOf:repost.repostOf,original:task.id,duplicate,manualStatus:manual.task.status,manualResult:manual.manualCheck.result,blocked,newAttempt:retry.id!==u.id};}finally{f.repo.close();}
  },dir);expect(r).toMatchObject({invalid:4,submitted:'submitted',pendingRepost:true,mismatchedWork:true,duplicate:true,manualStatus:'review',manualResult:'found',blocked:true,newAttempt:true});expect(r.repostOf).toBe(r.original);}finally{await app.close();await rm(dir,{recursive:true,force:true});}
 });
+test('publishing review regression blocks stale ordinary and repost drafts after sibling submissions',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'xumu-sibling-history-'));const app=await launchDesktop(dir);
+ try{const results=await app.evaluate(async(_e,root)=>{
+  const require=process.getBuiltinModule('module')!.createRequire(process.cwd()+'/package.json'),p=require('node:path');
+  const{createFixture}=require(p.join(process.cwd(),'tests-desktop/publishing-fixtures.cjs'));const results=[];
+  for(const state of['published','rejected']){
+   const f=createFixture(p.join(root,state),1);
+   try{
+    const old=f.tasks[0],oldBatch=f.store.reserveBatch(f.randomUUID(),[f.row(old)]),oldAttempt=f.store.getAttempt(old.id);
+    f.store.beginPreparation(oldAttempt.id);f.store.finishAttempt(oldAttempt.id,{kind:'not_submitted',errorCode:'PREPARE_FAILED'});f.store.pauseBatch(oldBatch.id);
+    const newer=f.repo.createTasks({assetId:f.asset.id,accountIds:[old.accountId],title:'更新的任务'})[0];
+    f.store.reserveBatch(f.randomUUID(),[f.row(newer)]);const a=f.store.getAttempt(newer.id);f.store.beginPreparation(a.id);f.store.beginSubmit(a.id);f.store.recordReceipt(a.id,f.receipt(newer,state));
+    let ordinaryBlocked=false;try{f.store.reserveBatch(f.randomUUID(),[f.row(old)]);}catch{ordinaryBlocked=true;}
+    const noNewAttempt=f.store.getAttempt(old.id).id===oldAttempt.id;
+    if(!ordinaryBlocked)f.store.cancelTask(old.id);
+    const repost=f.store.createRepostDraft({previousTaskId:newer.id,expectedRevision:1,acknowledged:true});
+    const allowed=f.store.reserveBatch(f.randomUUID(),[f.row(repost)]),ra=f.store.getAttempt(repost.id);
+    f.store.beginPreparation(ra.id);f.store.finishAttempt(ra.id,{kind:'not_submitted',errorCode:'PREPARE_FAILED'});f.store.pauseBatch(allowed.id);
+    const latest=f.store.createRepostDraft({previousTaskId:newer.id,expectedRevision:1,acknowledged:true});
+    f.store.reserveBatch(f.randomUUID(),[f.row(latest)]);const la=f.store.getAttempt(latest.id);f.store.beginPreparation(la.id);f.store.beginSubmit(la.id);f.store.recordReceipt(la.id,f.receipt(latest,state));
+    let staleExplicitBlocked=false;try{f.store.reserveBatch(f.randomUUID(),[f.row(repost)]);}catch{staleExplicitBlocked=true;}
+    results.push({state,ordinaryBlocked,noNewAttempt,explicitAccepted:!!allowed.id,staleExplicitBlocked});
+   }finally{f.repo.close();}
+  }return results;
+ },dir);expect(results).toEqual(['published','rejected'].map(state=>({state,ordinaryBlocked:true,noNewAttempt:true,explicitAccepted:true,staleExplicitBlocked:true})));}
+ finally{await app.close();await rm(dir,{recursive:true,force:true});}
+});

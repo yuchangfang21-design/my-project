@@ -20,3 +20,34 @@ test('publishing service waits for context shutdown on submission timeout',async
 test('publishing service keeps production adapter blocked despite persisted login claims',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'xumu-unverified-'));const app=await launchDesktop(dir);try{const r=await app.evaluate(async(_e,root)=>{const require=process.getBuiltinModule('module')!.createRequire(process.cwd()+'/package.json');const p=require('node:path');const{createServiceFixture}=require(p.join(process.cwd(),'tests-desktop/publishing-fixtures.cjs'));const f=await createServiceFixture(p.join(root,'db'),{count:1,unverified:true});try{f.repo.recordConnection({accountId:f.accounts[0].id,status:'logged_in',identity:f.row(f.tasks[0]).identity});const review=await f.service.reviewPublish({taskIds:[f.tasks[0].id]});let blocked=false;try{await f.service.startPublish({reviewId:review.id});}catch{blocked=true;}return{ready:review.readyTaskIds.length,blocked,reasons:review.rows[0].blockers.map((b:any)=>b.code),submits:f.state.submitCalls.length};}finally{await f.close();}},dir);expect(r).toMatchObject({ready:0,blocked:true,submits:0});expect(r.reasons).toContain('CAPABILITY_UNVERIFIED');}finally{await app.close();await rm(dir,{recursive:true,force:true});}
 });
+test('publishing review regression checks live identity after the final delayed video hash',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'xumu-final-identity-'));const app=await launchDesktop(dir);
+ try{const result=await app.evaluate(async(_e,root)=>{
+  const require=process.getBuiltinModule('module')!.createRequire(process.cwd()+'/package.json'),p=require('node:path');
+  const{createServiceFixture,settleBatch}=require(p.join(process.cwd(),'tests-desktop/publishing-fixtures.cjs'));const f=await createServiceFixture(p.join(root,'db'),{count:1});
+  let release:()=>void=()=>undefined;
+  try{
+   let started:()=>void=()=>undefined;const hashing=new Promise<void>(r=>{started=r;}),gate=new Promise<void>(r=>{release=r;});
+   f.state.prepareHook=async()=>{const original=f.media.verifiedPath.bind(f.media);f.media.verifiedPath=async(...args:any[])=>{const file=await original(...args);started();await gate;return file;};};
+   const review=await f.service.reviewPublish({taskIds:[f.tasks[0].id]}),batch=await f.service.startPublish({reviewId:review.id});
+   await hashing;f.state.identity.set(f.accounts[0].id,'switched-during-hash');release();await settleBatch(f,batch.id);
+   return{submits:f.state.submitCalls.length,status:f.store.task(f.tasks[0].id).status,phase:f.store.getAttempt(f.tasks[0].id).phase};
+  }finally{release();await f.close();}
+ },dir);expect(result).toEqual({submits:0,status:'waiting_login',phase:'finished'});}
+ finally{await app.close();await rm(dir,{recursive:true,force:true});}
+});
+test('publishing review regression checks live identity after hashing before upload preparation',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'xumu-upload-identity-'));const app=await launchDesktop(dir);
+ try{const result=await app.evaluate(async(_e,root)=>{
+  const require=process.getBuiltinModule('module')!.createRequire(process.cwd()+'/package.json'),p=require('node:path');
+  const{createServiceFixture,settleBatch}=require(p.join(process.cwd(),'tests-desktop/publishing-fixtures.cjs'));const f=await createServiceFixture(p.join(root,'db'),{count:1});let release:()=>void=()=>undefined;
+  try{
+   let started:()=>void=()=>undefined;const hashing=new Promise<void>(r=>{started=r;}),gate=new Promise<void>(r=>{release=r;});
+   const begin=f.store.beginPreparation.bind(f.store);f.store.beginPreparation=(id:string)=>{begin(id);const original=f.media.verifiedPath.bind(f.media);f.media.verifiedPath=async(...args:any[])=>{const file=await original(...args);started();await gate;return file;};};
+   const review=await f.service.reviewPublish({taskIds:[f.tasks[0].id]}),batch=await f.service.startPublish({reviewId:review.id});
+   await hashing;f.state.identity.set(f.accounts[0].id,'switched-before-upload');release();await settleBatch(f,batch.id);
+   return{prepares:f.state.prepareCalls.length,submits:f.state.submitCalls.length,status:f.store.task(f.tasks[0].id).status};
+  }finally{release();await f.close();}
+ },dir);expect(result).toEqual({prepares:0,submits:0,status:'waiting_login'});}
+ finally{await app.close();await rm(dir,{recursive:true,force:true});}
+});

@@ -25,6 +25,7 @@ test('packaged application migrates legacy tasks and retains new draft revisions
   const launch = (folder: string) => _electron.launch({ executablePath: executable, args: [...(process.platform === 'linux' ? ['--no-sandbox'] : []), `--user-data-dir=${folder}`], env });
   let app = await launch(join(root, 'bootstrap'));
   try {
+    await app.firstWindow();
     const legacyDir = join(root, '旧版工作区');
     const taskId = await app.evaluate(({ app }, folder) => {
       const require = process.getBuiltinModule('module')!.createRequire(app.getAppPath() + '/package.json');

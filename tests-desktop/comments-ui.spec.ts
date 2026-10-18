@@ -53,3 +53,48 @@ test('comments review regression preserves combined filters when switching back 
  try{const seeded=await seedComments(app),p=await openComments(app);await p.evaluate(id=>window.xumu!.markCommentProcessed({commentId:id,processed:true}),seeded.comments[0].id);await p.getByRole('button',{name:'刷新本地评论'}).click();await p.getByLabel('本地处理状态').selectOption('processed');await p.getByLabel('搜索评论').fill('同名');await expect(p.getByTestId('comment-row')).toHaveCount(1);await p.getByRole('button',{name:'账号：'+seeded.accounts.find(a=>a.id===seeded.comments[0].accountId)!.name,exact:true}).click();await expect(p.getByTestId('comment-row')).toHaveCount(1);await p.getByRole('button',{name:'全部账号',exact:true}).click();await expect(p.getByLabel('本地处理状态')).toHaveValue('processed');await expect(p.getByLabel('搜索评论')).toHaveValue('同名');await expect(p.getByTestId('comment-row')).toHaveCount(1);
  }finally{await closeDesktop(app);await rm(dir,{recursive:true,force:true});}
 });
+
+test('comments filter intents preserve processing state while a draft save delays rapid search changes',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'xumu-comments-filter-intents-')),app=await launchDesktop(dir);
+ try{
+  const seeded=await seedComments(app),p=await openComments(app);
+  await p.evaluate(id=>window.xumu!.markCommentProcessed({commentId:id,processed:true}),seeded.comments[0].id);
+  await p.getByRole('button',{name:'刷新本地评论'}).click();
+  await expect(p.getByTestId('comment-row')).toHaveCount(2);
+  await p.getByTestId('comment-row').first().click();
+  await app.evaluate(({ipcMain})=>{
+   const g=globalThis as any;g.savedHandler=(ipcMain as any)._invokeHandlers.get('xumu:comments-save-draft');g.filterSaveEntered=false;
+   const gate=new Promise<void>(resolve=>{g.releaseFilterSave=resolve;});
+   ipcMain.removeHandler('xumu:comments-save-draft');
+   ipcMain.handle('xumu:comments-save-draft',async(...args:any[])=>{g.filterSaveEntered=true;await gate;return g.savedHandler(...args);});
+  });
+  await p.getByLabel('评论回复草稿').fill('等待保存时仍保留组合筛选');
+  await p.getByLabel('本地处理状态').selectOption('processed');
+  await expect.poll(()=>app.evaluate(()=>(globalThis as any).filterSaveEntered)).toBe(true);
+  await p.getByLabel('搜索评论').fill('同名');
+  await app.evaluate(()=>(globalThis as any).releaseFilterSave());
+  await expect(p.getByLabel('本地处理状态')).toHaveValue('processed');
+  await expect(p.getByLabel('搜索评论')).toHaveValue('同名');
+  await expect(p.getByTestId('comment-row')).toHaveCount(1);
+  await expect.poll(async()=>(await p.evaluate(id=>window.xumu!.getCommentDetails(id),seeded.comments[0].id)).draft.text).toBe('等待保存时仍保留组合筛选');
+ }finally{try{await app.evaluate(()=>{(globalThis as any).releaseFilterSave?.();});}catch{}await closeDesktop(app);await rm(dir,{recursive:true,force:true});}
+});
+
+test('comments pagination waits for a pending scope reset while a draft saves',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'xumu-comments-filter-pagination-')),app=await launchDesktop(dir);
+ try{
+  const seeded=await seedComments(app,1);
+  await app.evaluate(({app},accountId)=>{
+   const require=process.getBuiltinModule('module')!.createRequire(process.cwd()+'/package.json'),path=require('node:path'),{Repository}=require(path.join(process.cwd(),'dist-desktop/desktop/storage/repository.js'));const repo=new Repository(app.getPath('userData'));repo.initialize();
+   try{repo.comments.startSync(accountId);repo.comments.completeSync(accountId,'test-owner-'+accountId,Array.from({length:41},(_,i)=>({ownerRemoteId:'test-owner-'+accountId,remoteWorkId:'same-work',remoteThreadId:'thread-'+i,remoteCommentId:'comment-'+i,authorRemoteId:'same-author-id',authorName:'本地夹具作者',text:i===0?'唯一匹配的评论':'本地分页评论'+i,remoteCreatedAt:'2026-10-18T00:00:00.000Z',observedAt:new Date().toISOString(),availability:'present'})),null,'end');}finally{repo.close();}
+  },seeded.accounts[0].id);
+  const p=await openComments(app),previous=p.getByRole('button',{name:'上一页评论'}),next=p.getByRole('button',{name:'下一页评论'});
+  await next.click();await expect(p.getByText('第 2 页',{exact:true})).toBeVisible();await expect(next).toBeEnabled();await p.getByTestId('comment-row').first().click();
+  await app.evaluate(({ipcMain})=>{const g=globalThis as any;g.savedHandler=(ipcMain as any)._invokeHandlers.get('xumu:comments-save-draft');g.filterSaveEntered=false;const gate=new Promise<void>(resolve=>{g.releaseFilterSave=resolve;});ipcMain.removeHandler('xumu:comments-save-draft');ipcMain.handle('xumu:comments-save-draft',async(...args:any[])=>{g.filterSaveEntered=true;await gate;return g.savedHandler(...args);});});
+  await p.getByLabel('评论回复草稿').fill('分页前必须保存的草稿');await p.getByLabel('搜索评论').fill('唯一匹配');
+  await expect.poll(()=>app.evaluate(()=>(globalThis as any).filterSaveEntered)).toBe(true);
+  await expect(previous).toBeDisabled();await expect(next).toBeDisabled();
+  await app.evaluate(()=>(globalThis as any).releaseFilterSave());
+  await expect(p.getByText('第 1 页',{exact:true})).toBeVisible();await expect(p.getByTestId('comment-row')).toHaveCount(1);await expect(p.getByTestId('comment-row')).toContainText('唯一匹配');await expect(previous).toBeDisabled();await expect(next).toBeDisabled();
+ }finally{try{await app.evaluate(()=>{(globalThis as any).releaseFilterSave?.();});}catch{}await closeDesktop(app);await rm(dir,{recursive:true,force:true});}
+});

@@ -20,7 +20,15 @@ jobs:
       - run: npm run desktop:prepare
       - run: npx playwright install chromium
       - run: npm test
-      - run: npm run test:desktop
+      - name: Check CI diagnostics
+        run: node --test tests-ci/desktop-summary.test.mjs
+      - name: Run desktop tests
+        run: npm run test:desktop -- --reporter=list,json
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: desktop-test-results/results.json
+      - name: Summarize desktop failures
+        if: always()
+        run: node scripts/summarize-desktop-results.mjs desktop-test-results/results.json
       - run: npm run desktop:dist -- --win --x64
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'

@@ -15,7 +15,7 @@ async function run(report){
   return{status:result.status,stdout:result.stdout,stderr:result.stderr,summary:await readFile(summary,'utf8').catch(()=> '')};
  }finally{await rm(folder,{recursive:true,force:true});}
 }
-function report(tests=[],errors=[]){return{stats:{expected:tests.filter(t=>t.status==='expected').length,unexpected:tests.filter(t=>t.status==='unexpected').length,flaky:0,skipped:tests.filter(t=>t.status==='skipped').length},suites:[{title:'comments-ui.spec.ts',specs:[{title:'评论详情键盘测试',file:'tests-desktop/comments-ui.spec.ts',line:15,tests}]}],errors};}
+function report(tests=[],errors=[]){return{stats:{expected:tests.filter(t=>t.status==='expected').length,unexpected:tests.filter(t=>t.status==='unexpected').length,flaky:0,skipped:tests.filter(t=>t.status==='skipped').length},suites:[{title:'comments-ui.spec.ts',specs:[{title:'评论详情键盘测试',file:'comments-ui.spec.ts',line:15,tests}]}],errors};}
 
 test('CI exposes the actual Windows failure and source location without publishing attachments',async()=>{
  const output=await run(report([{projectName:'windows',status:'unexpected',expectedStatus:'passed',results:[{status:'failed',error:{message:'Expected: 0\nReceived: 1'},attachments:[{name:'private attachment',body:'NEVER_PRINT_ATTACHMENT'}]}]}]));
@@ -34,4 +34,13 @@ test('CI clearly reports a missing results file instead of claiming a zero-test 
 });
 test('CI includes runner-level errors when no individual test started',async()=>{
  const output=await run(report([],[{message:'Electron runner crashed before tests'}]));assert.equal(output.status,0,output.stderr);assert.match(output.stdout,/::error/);assert.match(output.summary,/Electron runner crashed before tests/);assert.match(output.summary,/运行器错误：1/);assert.doesNotMatch(output.summary,/全部通过/);
+});
+
+test('CI maps absolute Windows source locations back into the repository',async()=>{
+ const input=report([{status:'unexpected',expectedStatus:'passed',results:[{status:'failed',error:{message:'Windows-specific failure'}}]}]);input.suites[0].specs[0].file='D:\\a\\my-project\\my-project\\tests-desktop\\comments-ui.spec.ts';
+ const output=await run(input);assert.equal(output.status,0,output.stderr);assert.match(output.stdout,/::error file=tests-desktop\/comments-ui.spec.ts,line=15/);assert.doesNotMatch(output.stdout,/D:/);
+});
+test('CI never annotates a source location outside the desktop test directory',async()=>{
+ const input=report([{status:'unexpected',expectedStatus:'passed',results:[{status:'failed',error:{message:'Rejected location'}}]}]);input.suites[0].specs[0].file='../private.txt';
+ const output=await run(input);assert.equal(output.status,0,output.stderr);assert.doesNotMatch(output.stdout,/file=/);assert.match(output.stdout,/::error title=/);
 });

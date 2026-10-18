@@ -7,7 +7,8 @@ const property=value=>annotation(value).replace(/:/g,'%3A').replace(/,/g,'%2C');
 const markdown=value=>clean(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/`/g,'&#96;');
 function location(spec){
  const path=String(spec.file??'').replace(/\\/g,'/'),index=path.lastIndexOf('tests-desktop/');
- const file=index>=0?path.slice(index):'';
+ const relative=index>=0?path.slice(index):(!path.startsWith('/')&&!/^[A-Za-z]:/.test(path)?'tests-desktop/'+path:'');
+ const file=relative.endsWith('.spec.ts')?relative:'';
  return file&&!file.split('/').includes('..')&&Number.isSafeInteger(spec.line)&&spec.line>0?`file=${property(file)},line=${spec.line},`:'';
 }
 function collect(suites,parent=[]){

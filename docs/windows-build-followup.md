@@ -29,7 +29,7 @@
 
 评论行现在提供与当前详情一致的 `aria-pressed` 状态，读屏用户可识别选中的评论。该项属于阶段B记录的唯一延期小问题，本轮已补齐。相关现有评论界面8项及浏览器/离线演示10项通过；没有增加产品依赖或改变真实账号操作开关。
 
-诊断运行：[39114287914](https://github.com/yuchangfang21-design/my-project/actions/runs/39114287914)，标签 `desktop-build-0.4.0-diagnostics-1`，对应源码 `da720d0`。该运行已失败，公开注释显示10项失败：素材导入/恢复3项、发布素材校验1项、依赖导入的发布界面4项，以及留言界面2项超时。尚未生成安装包。
+诊断运行：[39114287914](https://github.com/yuchangfang21-design/my-project/actions/runs/39114287914)，标签 `desktop-build-0.4.0-diagnostics-1`，对应源码 `da720d0`。该运行已失败，公开注释列出至少10项失败：素材导入/恢复3项、发布素材校验1项、依赖导入的发布界面4项，以及留言界面2项超时。尚未生成安装包。
 
 第二次诊断保留全部测试门槛，先让导入夹具在失败时报告原始 ImportReport，而不是继续读取不存在的 assets[0]；素材校验同时报告本地夹具的文件类型、inode、哈希、修改时间及规范路径比较结果，不读取真实账号文件。两处留言操作使用更短的5秒点击期限，以保留被遮挡等调用日志，不延长测试总期限。本地对应5项仍通过。新标签 `desktop-build-0.4.0-diagnostics-2` 用于核实上述具体原因；此时尚未修改素材生产逻辑。
 
@@ -49,4 +49,9 @@
 
 一次独立只读审阅：Critical0、Important0、Minor1。唯一小问题是仅断言总数可能掩盖“别名误拒绝与junction误接受相互抵消”；已补充精确失败文件名和链接拒绝理由断言，没有延期问题。
 
-相关22项实际Linux Electron测试通过；补强后的完整76项实际Linux Electron测试全部通过（约3.8分钟）。CI摘要增加独立 totals notice，避免GitHub每步骤错误注释数量限制掩盖实际失败总数；新增用例先失败，修复后8项全部通过。Windows工作流仍执行全部浏览器、Electron、打包后启动测试，最后才计算安装包SHA-256并上传产物；哈希同时写入公开构建注释便于核对。
+相关22项实际Linux Electron测试通过；补强后的完整76项实际Linux Electron测试全部通过（约3.5分钟）。CI摘要增加独立 totals notice，避免GitHub每步骤错误注释数量限制掩盖实际失败总数；新增用例先失败，修复后8项全部通过。Windows工作流仍执行全部浏览器、Electron、打包后启动测试，最后才计算安装包SHA-256并上传产物；哈希同时写入公开构建注释便于核对。
+
+
+0.4.1 首次原生复测 [39117595394](https://github.com/yuchangfang21-design/my-project/actions/runs/39117595394)，源码 `94b5240`：73通过、1超时、2跳过。素材、发布和评论的原生测试已通过；唯一失败是旧工作区综合测试在窄屏取消任务后没有先关闭详情抽屉，点击消息导航被遮挡。本地1000px复现同样的 `pub-drawer-overlay intercepts pointer events`，随后把综合流程显式覆盖1440px与1000px，在窄屏取消后正常关闭抽屉再切换导航。相关2项本地回归通过。
+
+两项跳过早已存在，分别是 `publishing storage refuses migration when the backup cannot be written` 与 `comments storage refuses schema2 migration when backup cannot be created`：其夹具使用POSIX权限位，不适用于Windows ACL。本轮未新增跳过；Windows备份失败的ACL场景仍需实机验收。后续通过结果必须单独保留这2项跳过，不记为通过。新标签 `desktop-build-0.4.1-acceptance-1` 仅包含该界面测试修正与记录，产品版本及实现保持0.4.1，继续执行全部原生门槛。

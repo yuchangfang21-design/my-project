@@ -1,10 +1,10 @@
 # Windows 评论阶段 B 验收
 
-本清单适用于 0.4.0。本地评论核心与实际抖音接入分别验收；当前正式版使用 `UnverifiedCommentsAdapter`，不能同步或发送真实评论。私信属于阶段 C，尚未接通。
+本清单基于0.4.0评论本地核心，当前0.4.2检查版继续使用 `UnverifiedCommentsAdapter`，不能同步或发送真实评论。本地评论核心与实际抖音接入分别验收；私信属于阶段 C，尚未接通。
 
 ## 获取与安装
 
-在 [Windows 构建页面](https://github.com/yuchangfang21-design/my-project/actions/workflows/windows-build.yml) 找到标签 `desktop-build-0.4.0` 对应的成功运行，下载 `Xumu-Windows-x64` 实际产物。未成功或没有产物时不能视为可安装。解压后校验 `SHA256SUMS.txt`，运行其中的 NSIS 安装程序。源码 ZIP 和 HTML 演示不是 Windows 软件安装包。
+在[0.4.2成功构建](https://github.com/yuchangfang21-design/my-project/actions/runs/39129469306)的Artifacts中下载 `Xumu-Windows-x64` 实际产物。解压后校验 `SHA256SUMS.txt`，运行 `Xumu-0.4.2-win-x64.exe`。源码ZIP和HTML演示不是Windows软件安装包。0.4.2的“生成接入检查”用于后续联调，不能同步或发送评论，详见[官方接入跟进](official-site-integration-followup.md)。
 
 使用测试副本，退出旧程序后备份整个本机工作区。不要上传工作区、浏览器 profiles、Cookie、二维码、真实评论、私信或素材至仓库。安装和卸载默认保留用户数据；不要使用真实工作区进行故障注入。
 

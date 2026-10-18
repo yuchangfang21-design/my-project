@@ -86,3 +86,7 @@
 下载步骤：登录仓库所属GitHub账号，打开上述成功运行，在页面底部Artifacts下载Xumu-Windows-x64，解压后核对SHA256SUMS.txt，再运行安装程序。没有创建公开Release。
 
 CI结果证明Windows构建、原生数据库及打包程序自动化启动/迁移/重启检查；人工安装卸载、真实扫码身份和Windows ACL错误场景仍需实机验收。真实发布、评论读取/发送适配器继续静态禁用，私信仍属于阶段C。
+
+## 后续0.4.2接入检查版
+
+用户已安装0.4.1并反馈扫码完成；软件身份解析仍未实现，因此保持待确认。已新增本机只读检查入口以取得后续联调依据。[0.4.2完整Windows构建39129469306](https://github.com/yuchangfang21-design/my-project/actions/runs/39129469306)成功，桌面81项、打包程序3项全部通过，无失败或跳过，并提供 `Xumu-Windows-x64` 实际安装包。先前两项迁移备份权限跳过已由[原生ACL验证](windows-permissions-followup.md)补齐；这不代表所有Windows用户目录权限均已人工验收。真实身份、发布及评论仍未接通，具体范围、下载与校验见[官方接入跟进](official-site-integration-followup.md)。

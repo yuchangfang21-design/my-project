@@ -1,8 +1,8 @@
 # 序幕 · 创作者工作台
 
-Windows 多账号运营工具，包含已确认的 HTML 界面演示和 **0.4.1 Electron 桌面版**。桌面版可持久保存账号、真实视频副本和本地任务，并管理独立的账号登录浏览器。支持发布文案、逐任务核对与中断恢复；新增按账号归属的评论工作台、500ms草稿保存、逐条回复核对和未知结果恢复。真实身份解析、远端发布、评论读取与回复仍待官方实测，私信尚未接通。
+Windows 多账号运营工具，包含已确认的 HTML 界面演示和 **0.4.2 Electron 接入检查版**。桌面版可持久保存账号、真实视频副本和本地任务，并管理独立的账号登录浏览器。支持发布文案、逐任务核对与中断恢复；新增按账号归属的评论工作台、500ms草稿保存、逐条回复核对和未知结果恢复。真实身份解析、远端发布、评论读取与回复尚未接通，私信尚未接通。
 
-**0.4.2接入检查版正在验证：** 新增账号卡片“生成接入检查”，预览和复制本机只读报告，无需查地址或导出浏览器会话；账号身份识别、真实发布和评论仍未接通。报告用于后续联调，不能视为这些功能已完成。进展见[官方接入跟进](docs/official-site-integration-followup.md)。
+**0.4.2接入检查版：** 新增账号卡片“生成接入检查”，预览和复制本机只读报告，无需查地址或导出浏览器会话；账号身份识别、真实发布和评论仍未接通。报告用于后续联调，不能视为这些功能已完成。进展见[官方接入跟进](docs/official-site-integration-followup.md)。
 
 ## 桌面版
 
@@ -24,9 +24,9 @@ npm run test:packaged
 
 Linux 图形测试需要 Xvfb 或已有 DISPLAY，缺少默认 Xvfb 时可设置 `XUMU_XVFB_PATH`。Windows 不使用 Xvfb。SQLite 13 使用 npm 包中已验证可由 Electron 加载的 Node-API 预编译模块；不执行多余的 ABI 重编译。
 
-**Windows安装包：** [0.4.1成功构建与下载入口](https://github.com/yuchangfang21-design/my-project/actions/runs/39118990826)。登录GitHub后，在该页 **Artifacts** 中下载 **Xumu-Windows-x64**，解压ZIP并运行 `Xumu-0.4.1-win-x64.exe`；随包提供 `SHA256SUMS.txt`。本次Windows原生桌面75项通过、2项既有POSIX权限测试跳过，打包后程序3项通过。具体记录见[Windows构建跟进](docs/windows-build-followup.md)。
+**Windows安装包：** [0.4.2接入检查版构建与下载入口](https://github.com/yuchangfang21-design/my-project/actions/runs/39129469306)。登录GitHub后，在该页 **Artifacts** 中下载 **Xumu-Windows-x64**，解压ZIP并运行 `Xumu-0.4.2-win-x64.exe`；随包提供 `SHA256SUMS.txt`。本次Windows原生桌面81项、打包后程序3项全部通过，均无失败或跳过。安装后打开已有账号的官方浏览器，保持窗口打开，返回账号卡片点击“生成接入检查”，预览后可复制报告。具体记录见[官方接入跟进](docs/official-site-integration-followup.md)。
 
-**后续权限验证：** [Windows原生补充验收](https://github.com/yuchangfang21-design/my-project/actions/runs/39122040630)已用NTFS ACL覆盖上述两项跳过场景，完整桌面套件77项通过、0失败、0跳过；备份无法创建时保留旧数据库，恢复权限后可升级。产品源码与上述安装包一致，继续使用0.4.1。详见[权限验证记录](docs/windows-permissions-followup.md)。
+**权限验证：** [Windows原生补充验收](https://github.com/yuchangfang21-design/my-project/actions/runs/39122040630)已用NTFS ACL覆盖0.4.1中原先跳过的两项场景，完整桌面套件77项通过、0失败、0跳过；备份无法创建时保留旧数据库，恢复权限后可升级。0.4.2完整构建也执行了这些测试。详见[权限验证记录](docs/windows-permissions-followup.md)。
 
 Windows 原生构建入口是仓库 Actions 的 **Build Windows desktop**。安装包实际生成并通过测试后，工作流提供 **Xumu-Windows-x64** 产物。构建未配置开发者签名，未运行的 Windows 验收不算通过；详见 [Windows 验收步骤](docs/windows-desktop-acceptance.md)。
 

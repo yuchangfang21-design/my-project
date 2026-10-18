@@ -14,3 +14,17 @@ function seedV2(dir){
  return{db,expected,task};
 }
 module.exports={createCommentsFixture,seedV2};
+async function createCommentServiceFixture(dir,{count=2,unverified=false,budgets}={}){
+ const{chromium}=require('playwright-core'),{findBrowser}=require(p.join(process.cwd(),'dist-desktop/desktop/browser/session-manager.js'));
+ const{CommentsService}=require(p.join(process.cwd(),'dist-desktop/desktop/comments/service.js')),{UnverifiedCommentsAdapter}=require(p.join(process.cwd(),'dist-desktop/desktop/comments/adapter.js')),{OperationCoordinator}=require(p.join(process.cwd(),'dist-desktop/desktop/publishing/coordinator.js'));
+ const f=createCommentsFixture(dir,count),browser=await chromium.launch({executablePath:findBrowser(),headless:true,args:process.platform==='linux'?['--no-sandbox']:[]}),pages=new Map(),contexts=new Map(),ids=new Map();
+ const state={identity:new Map(),canRead:true,canReply:true,version:'fixture-comments-v1',readCalls:[],readHook:null,onClose:null,closed:[],prepareCalls:0,submitCalls:0,readReplyCalls:0,prepareHook:null,submitHook:null,targetHook:null,resultHook:null};
+ for(const account of f.accounts){const context=await browser.newContext(),page=await context.newPage();await page.setContent('<main data-owner="fixture-'+account.id+'"><article data-comment="shared-comment">本地夹具评论</article></main>');contexts.set(account.id,context);pages.set(account.id,page);ids.set(account.id,f.randomUUID());}
+ const accountFor=page=>f.accounts.find(a=>pages.get(a.id)===page);
+ const sessions={withAccountPage:async(accountId,work)=>{const page=pages.get(accountId);if(!page||page.isClosed())throw new Error('未打开账号登录窗口');return work(page,ids.get(accountId));},close:async accountId=>{await contexts.get(accountId)?.close();state.closed.push(accountId);state.onClose?.(accountId);}};
+ const observation=async page=>{const account=accountFor(page),owner=await page.locator('main').getAttribute('data-owner');return{identity:{remoteId:state.identity.get(account.id)||owner,displayName:'本地夹具身份',observedAt:new Date().toISOString()},canRead:state.canRead,canReply:state.canReply,version:state.version};};
+ const adapter={observe:observation,readComments:async(page,cursor,signal)=>{const account=accountFor(page);state.readCalls.push({accountId:account.id,cursor});if(state.readHook)return state.readHook(page,cursor,signal);const text=await page.locator('article').innerText();return{comments:[f.observed(account,{text})],nextCursor:null,coverage:'end'};}};
+ let clock=Date.now();const coordinator=new OperationCoordinator(),service=new CommentsService(f.comments,f.repo,sessions,coordinator,unverified?new UnverifiedCommentsAdapter():adapter,()=>clock,budgets);
+ return{...f,browser,pages,contexts,ids,sessions,state,adapter,coordinator,service,advance(ms){clock+=ms;},async close(){await service.close();await coordinator.close();await browser.close();f.repo.close();}};
+}
+module.exports.createCommentServiceFixture=createCommentServiceFixture;

@@ -67,3 +67,22 @@
 
 
 打包后程序验收也保留JSON结果和独立 `Packaged test totals` 注释，只有打包步骤成功后才汇总，区分源桌面测试与打包程序启动测试。新增标签区分回归先RED后GREEN，CI工具最终10项通过。仅增强结果可见性，没有移除测试或改变退出码。
+
+
+## 最终0.4.1交付结果
+
+- 原生打包诊断 [39118706405](https://github.com/yuchangfang21-design/my-project/actions/runs/39118706405)，源码 `15fb178`：成功，2分32秒；仅保留诊断日志。
+- 完整交付工作流 [39118990826](https://github.com/yuchangfang21-design/my-project/actions/runs/39118990826)，标签 `desktop-build-0.4.1-acceptance-2`，源码 `75ed22a`：成功。
+- Windows桌面：75通过、0失败、2跳过；两项POSIX权限夹具的Windows ACL场景仍待实机验收，没有新增跳过。
+- Windows实际打包后程序：3通过、0失败、0跳过。主工作流也完成浏览器回归与10项CI工具检查。
+- 已确认产物 `Xumu-Windows-x64`，其中安装程序 `Xumu-0.4.1-win-x64.exe`，并包含校验文件。
+
+安装程序SHA-256（不是GitHub产物ZIP的摘要）：
+
+```text
+6dcaa5fa177df8ca939c806a4017dcfc50e0a9e67f99973bae4b8a10086fbc81  Xumu-0.4.1-win-x64.exe
+```
+
+下载步骤：登录仓库所属GitHub账号，打开上述成功运行，在页面底部Artifacts下载Xumu-Windows-x64，解压后核对SHA256SUMS.txt，再运行安装程序。没有创建公开Release。
+
+CI结果证明Windows构建、原生数据库及打包程序自动化启动/迁移/重启检查；人工安装卸载、真实扫码身份和Windows ACL错误场景仍需实机验收。真实发布、评论读取/发送适配器继续静态禁用，私信仍属于阶段C。

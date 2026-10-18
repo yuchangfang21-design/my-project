@@ -22,7 +22,7 @@ npm run test:packaged
 
 Linux 图形测试需要 Xvfb 或已有 DISPLAY，缺少默认 Xvfb 时可设置 `XUMU_XVFB_PATH`。Windows 不使用 Xvfb。SQLite 13 使用 npm 包中已验证可由 Electron 加载的 Node-API 预编译模块；不执行多余的 ABI 重编译。
 
-**Windows跟进：** 已确认并修复Windows短路径导致的素材误拒绝，并补齐明确宽度的界面回归；0.4.1原生构建待验证，暂没有可确认的安装包。证据及验证进展见[Windows构建跟进](docs/windows-build-followup.md)。
+**Windows安装包：** [0.4.1成功构建与下载入口](https://github.com/yuchangfang21-design/my-project/actions/runs/39118990826)。登录GitHub后，在该页 **Artifacts** 中下载 **Xumu-Windows-x64**，解压ZIP并运行 `Xumu-0.4.1-win-x64.exe`；随包提供 `SHA256SUMS.txt`。本次Windows原生桌面75项通过、2项既有POSIX权限测试跳过，打包后程序3项通过。具体记录见[Windows构建跟进](docs/windows-build-followup.md)。
 
 Windows 原生构建入口是仓库 Actions 的 **Build Windows desktop**。安装包实际生成并通过测试后，工作流提供 **Xumu-Windows-x64** 产物。构建未配置开发者签名，未运行的 Windows 验收不算通过；详见 [Windows 验收步骤](docs/windows-desktop-acceptance.md)。
 

@@ -1,0 +1,31 @@
+name: Diagnose Windows packaging (no installer delivery)
+on:
+  push:
+    tags:
+      - 'desktop-package-diagnostic-*'
+permissions:
+  contents: read
+jobs:
+  diagnose-packaging:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run desktop:prepare
+      - run: node --test tests-ci/packaging-policy.test.mjs
+      - name: Diagnose native packaging
+        run: ./scripts/build-windows-installer.ps1
+        shell: pwsh
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Windows-packaging-diagnostics-only
+          path: desktop-test-results/package-build.log
+          if-no-files-found: error

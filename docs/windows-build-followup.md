@@ -55,3 +55,12 @@
 0.4.1 首次原生复测 [39117595394](https://github.com/yuchangfang21-design/my-project/actions/runs/39117595394)，源码 `94b5240`：73通过、1超时、2跳过。素材、发布和评论的原生测试已通过；唯一失败是旧工作区综合测试在窄屏取消任务后没有先关闭详情抽屉，点击消息导航被遮挡。本地1000px复现同样的 `pub-drawer-overlay intercepts pointer events`，随后把综合流程显式覆盖1440px与1000px，在窄屏取消后正常关闭抽屉再切换导航。相关2项本地回归通过。
 
 两项跳过早已存在，分别是 `publishing storage refuses migration when the backup cannot be written` 与 `comments storage refuses schema2 migration when backup cannot be created`：其夹具使用POSIX权限位，不适用于Windows ACL。本轮未新增跳过；Windows备份失败的ACL场景仍需实机验收。后续通过结果必须单独保留这2项跳过，不记为通过。新标签 `desktop-build-0.4.1-acceptance-1` 仅包含该界面测试修正与记录，产品版本及实现保持0.4.1，继续执行全部原生门槛。
+
+
+## 打包阶段的进一步诊断
+
+原生验收 [39118061256](https://github.com/yuchangfang21-design/my-project/actions/runs/39118061256)，源码 `7c9304b`：桌面75通过、0失败、2项既有POSIX权限测试跳过。失败步骤已转为 `Run npm run desktop:dist -- --win --x64`；没有安装包产物。
+
+检查已安装的electron-builder 26.15.3源码并以其真实PublishManager构造器复现：标签上下文且未显式设置publish时，`isPublish=true`。原打包退出码尚没有详细日志，不能只凭该配置认定全部根因；但按既定“只构建、不创建公开Release”的范围，已明确加入 `--publish never`。该回归先RED（PUBLISH_ENABLED=true），随后GREEN；CI工具共9项通过。没有真实发布请求。
+
+主构建的打包步骤现在使用PowerShell脚本保存完整日志并在失败时生成精简错误注释，保留原npm退出码及全部交付门槛。另增只诊断打包的原生工作流，标签 `desktop-package-diagnostic-*`；它仅上传诊断日志，不运行交付流程或上传安装包，避免为每次取错误日志重跑已通过的整套桌面测试。只有完整主工作流成功并上传Xumu-Windows-x64才可交付。

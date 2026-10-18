@@ -12,7 +12,7 @@
     "desktop:build": "node scripts/build-desktop.mjs",
     "desktop:dev": "npm run desktop:build && electron .",
     "test:desktop": "node scripts/test-desktop.mjs",
-    "desktop:dist": "npm run desktop:build && electron-builder",
+    "desktop:dist": "npm run desktop:build && electron-builder --publish never",
     "desktop:prepare": "node node_modules/electron/install.js",
     "test:packaged": "playwright test -c playwright.packaged.config.ts"
   },

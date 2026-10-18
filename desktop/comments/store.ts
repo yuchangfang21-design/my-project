@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import{randomUUID}from'node:crypto';
-import type{CommentRecord,CommentRecordInput,CommentDraft,CommentDraftInput,CommentListInput,CommentSyncState,CommentDetails,CommentSummary}from'../../shared/comments-contracts.js';
+import type{CommentRecord,CommentRecordInput,CommentDraft,CommentDraftInput,CommentListInput,CommentSyncState,CommentDetails,CommentSummary,CommentReplyReview,CommentReplyReceipt,CommentReplyCheckInput}from'../../shared/comments-contracts.js';
 import{id,record}from'../validation.js';
 export function exactText(value:unknown,label:string,max:number,empty=false):string{
  if(typeof value!=='string'||value.length>max||(!empty&&!value.trim())||value.includes('\0'))throw new Error(label+'无效');return value;
@@ -13,6 +13,14 @@ export function observedComment(value:unknown):CommentRecordInput{
  if(!['present','removed','unsupported'].includes(String(r.availability)))throw new Error('评论类型无效');
  const dates=['remoteCreatedAt','observedAt'].map(k=>{if(typeof r[k]!=='string'||!Number.isFinite(Date.parse(r[k] as string)))throw new Error('评论时间无效');return new Date(r[k] as string).toISOString();});
  return{...identity,authorName:exactText(r.authorName,'作者名称',200),text:exactText(r.text,'评论正文',8000,r.availability!=='present'),remoteCreatedAt:dates[0],observedAt:dates[1],availability:r.availability as CommentRecordInput['availability']};
+}
+export type CommentReplyAttempt={id:string;reviewId:string;commentId:string;phase:'reserved'|'submit_intent'|'finished';outcome:'none'|'not_sent'|'sent'|'review';snapshot:CommentReplyReview;receipt:CommentReplyReceipt|null;createdAt:string};
+export function matchesReplyTarget(comment:CommentRecordInput,review:CommentReplyReview):boolean{
+ return comment.availability==='present'&&comment.text===review.sourceText&&(['ownerRemoteId','remoteWorkId','remoteThreadId','remoteCommentId','authorRemoteId','authorName']as const).every(k=>comment[k]===review[k]);
+}
+export function officialCommentUrl(value:unknown):string{
+ const raw=exactText(value,'官方评论链接',2048);let url:URL;try{url=new URL(raw);}catch{throw new Error('官方评论链接无效');}
+ if(url.protocol!=='https:'||url.hostname!=='creator.douyin.com'||url.port||url.username||url.password||url.search||url.hash)throw new Error('评论入口不是已验证的官方地址');return url.href;
 }
 export class CommentStore{
  constructor(private db:Database.Database){}
@@ -87,5 +95,64 @@ export class CommentStore{
   })();
  }
  failSync(accountId:string,errorCode:string):CommentSyncState{const old=this.sync(accountId),code=['LOGIN_REQUIRED','CAPABILITY_UNVERIFIED','OPERATION_TIMEOUT','APP_CLOSING','READ_FAILED'].includes(errorCode)?errorCode:'READ_FAILED';const next:CommentSyncState={...old,state:'failed',errorCode:code};this.writeSync(next,this.cursor(accountId));return next;}
- recoverInterrupted():void{this.db.transaction(()=>{for(const old of this.syncStates())if(old.state==='syncing')this.writeSync({...old,state:'interrupted',errorCode:'SYNC_INTERRUPTED'},this.cursor(old.accountId));})();}
+ private replyAttempt(attemptId:string):CommentReplyAttempt{
+  const row=this.db.prepare('SELECT data,phase,outcome FROM comment_reply_attempts WHERE id=?').get(id(attemptId)) as any;if(!row)throw new Error('回复尝试不存在');return{...JSON.parse(row.data),phase:row.phase,outcome:row.outcome};
+ }
+ getReplyAttempt(commentId:string):CommentReplyAttempt|null{
+  const row=this.db.prepare('SELECT id FROM comment_reply_attempts WHERE comment_id=? ORDER BY rowid DESC LIMIT 1').get(id(commentId)) as {id:string}|undefined;return row?this.replyAttempt(row.id):null;
+ }
+ replyForReview(reviewId:string):CommentReplyAttempt|null{
+  const row=this.db.prepare('SELECT id FROM comment_reply_attempts WHERE review_id=?').get(id(reviewId)) as {id:string}|undefined;return row?this.replyAttempt(row.id):null;
+ }
+ private writeReply(value:CommentReplyAttempt):void{this.db.prepare('UPDATE comment_reply_attempts SET data=?,phase=?,outcome=? WHERE id=?').run(JSON.stringify(value),value.phase,value.outcome,value.id);}
+ assertReplySnapshot(review:CommentReplyReview):void{
+  const{comment,draft}=this.details(review.commentId);
+  if(comment.accountId!==review.accountId||comment.sourceRevision!==review.sourceRevision||draft.revision!==review.draftRevision||draft.text!==review.text||!matchesReplyTarget(comment,review))throw new Error('源评论、目标或草稿已变化，请重新核对');
+ }
+ reserveReply(review:CommentReplyReview):CommentReplyAttempt{
+  id(review.id);id(review.commentId);id(review.accountId);
+  return this.db.transaction(()=>{
+   const existing=this.replyForReview(review.id);if(existing){if(existing.commentId!==review.commentId)throw new Error('确认目标不一致');return existing;}
+   if(review.blockers.length||!review.identity||review.identity.remoteId!==review.ownerRemoteId||!review.contextId||!review.capabilityVersion)throw new Error('回复身份或能力尚未核实');id(review.contextId);exactText(review.text,'回复内容',2000);
+   this.assertReplySnapshot(review);const details=this.details(review.commentId);
+   if(details.replyState==='sending'||details.replyState==='sent'||(details.replyState==='review'&&details.manualCheck?.result!=='not_found'))throw new Error('已有发送或待核对记录，不能再次发送');
+   const attempt:CommentReplyAttempt={id:randomUUID(),reviewId:review.id,commentId:review.commentId,phase:'reserved',outcome:'none',snapshot:structuredClone(review),receipt:null,createdAt:new Date().toISOString()};
+   this.db.prepare('INSERT INTO comment_reply_attempts VALUES(?,?,?,?,?,?)').run(attempt.id,attempt.reviewId,attempt.commentId,attempt.phase,attempt.outcome,JSON.stringify(attempt));this.event(attempt.commentId,'reply_confirmed','已确认此条评论的回复内容',attempt.id);return attempt;
+  })();
+ }
+ beginReplySubmit(attemptId:string):void{this.db.transaction(()=>{
+  const attempt=this.replyAttempt(attemptId);if(attempt.phase!=='reserved'||this.getReplyAttempt(attempt.commentId)?.id!==attempt.id)throw new Error('回复尝试不能提交');this.assertReplySnapshot(attempt.snapshot);
+  this.writeReply({...attempt,phase:'submit_intent'});this.event(attempt.commentId,'reply_submit_intent','准备提交此条回复，结果需要核实',attempt.id);
+ })();}
+ finishReply(attemptId:string,outcome:{kind:'not_sent'|'review'}):void{this.db.transaction(()=>{
+  const attempt=this.replyAttempt(attemptId);
+  if(attempt.phase==='finished'){if(attempt.outcome===outcome.kind)return;throw new Error('不能覆盖已记录的回复结果');}
+  if(outcome.kind==='review'?attempt.phase!=='submit_intent':attempt.phase==='submit_intent')throw new Error('不能把可能已提交的回复记为未发送');
+  this.writeReply({...attempt,phase:'finished',outcome:outcome.kind});this.event(attempt.commentId,outcome.kind==='review'?'reply_review':'reply_failed',outcome.kind==='review'?'发送结果不明确，请先核对官方记录':'本次未发送，请检查账号、源评论和草稿后重新核对',attempt.id);
+ })();}
+ recordReplyReceipt(attemptId:string,input:CommentReplyReceipt):void{
+  const r=record(input,['remoteReplyId','accountRemoteId','remoteWorkId','remoteThreadId','remoteCommentId','recipientRemoteId','state','officialUrl','observedAt']);
+  const remoteReplyId=remoteId(r.remoteReplyId),accountRemoteId=remoteId(r.accountRemoteId),remoteWorkId=remoteId(r.remoteWorkId),remoteThreadId=remoteId(r.remoteThreadId),remoteCommentId=remoteId(r.remoteCommentId),recipientRemoteId=remoteId(r.recipientRemoteId),officialUrl=officialCommentUrl(r.officialUrl);
+  if(r.state!=='sent'||typeof r.observedAt!=='string'||!Number.isFinite(Date.parse(r.observedAt)))throw new Error('回复回执无效');
+  const receipt:CommentReplyReceipt={remoteReplyId,accountRemoteId,remoteWorkId,remoteThreadId,remoteCommentId,recipientRemoteId,state:'sent',officialUrl,observedAt:new Date(r.observedAt).toISOString()};
+  this.db.transaction(()=>{
+   const attempt=this.replyAttempt(attemptId),snapshot=attempt.snapshot;
+   if(this.getReplyAttempt(attempt.commentId)?.id!==attempt.id||!['submit_intent','finished'].includes(attempt.phase)||attempt.outcome==='not_sent')throw new Error('回执不属于当前发送尝试');
+   if(snapshot.ownerRemoteId!==accountRemoteId||snapshot.remoteWorkId!==remoteWorkId||snapshot.remoteThreadId!==remoteThreadId||snapshot.remoteCommentId!==remoteCommentId||snapshot.authorRemoteId!==recipientRemoteId||(attempt.receipt&&attempt.receipt.remoteReplyId!==remoteReplyId))throw new Error('回复回执与账号、源评论或作者不一致');
+   if(this.db.prepare("SELECT id FROM comment_reply_attempts WHERE id!=? AND json_extract(data,'$.receipt.accountRemoteId')=? AND json_extract(data,'$.receipt.remoteReplyId')=?").get(attempt.id,accountRemoteId,remoteReplyId))throw new Error('该回复回执已关联其他尝试');
+   this.writeReply({...attempt,phase:'finished',outcome:'sent',receipt});this.event(attempt.commentId,'reply_sent','已核实该条回复的官方发送结果',attempt.id);
+  })();
+ }
+ recordReplyCheck(input:CommentReplyCheckInput):CommentDetails{
+  const r=record(input,['commentId','attemptId','result','note']),commentId=id(r.commentId),attemptId=id(r.attemptId),note=exactText(r.note,'核对说明',1000,true);
+  if(r.result!=='found'&&r.result!=='not_found')throw new Error('人工核对结果无效');
+  return this.db.transaction(()=>{const attempt=this.getReplyAttempt(commentId);if(!attempt||attempt.id!==attemptId||attempt.phase!=='finished'||attempt.outcome!=='review')throw new Error('仅当前待核对尝试可记录人工结果');
+   const data={result:r.result,note,createdAt:new Date().toISOString()};this.db.prepare('INSERT INTO comment_reply_checks(comment_id,attempt_id,data) VALUES(?,?,?)').run(commentId,attemptId,JSON.stringify(data));this.event(commentId,'reply_manual_check',r.result==='found'?'人工记录：已找到回复（尚未自动核实）':'人工记录：确认未发送（仍需重新核对）',attemptId);return this.details(commentId);
+  })();
+ }
+ recoverInterrupted():void{this.db.transaction(()=>{
+  for(const old of this.syncStates())if(old.state==='syncing')this.writeSync({...old,state:'interrupted',errorCode:'SYNC_INTERRUPTED'},this.cursor(old.accountId));
+  const active=this.db.prepare("SELECT id FROM comment_reply_attempts WHERE phase!='finished'").all() as {id:string}[];
+  for(const row of active){const old=this.replyAttempt(row.id),uncertain=old.phase==='submit_intent';this.writeReply({...old,phase:'finished',outcome:uncertain?'review':'not_sent'});this.event(old.commentId,'reply_recovered',uncertain?'重启恢复：发送可能已发生，请先核对':'重启恢复：本次尚未发送，等待重新核对',old.id);}
+ })();}
 }

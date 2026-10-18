@@ -49,5 +49,5 @@ export async function inspectOfficialPages(context: BrowserContext): Promise<Acc
       pages.push({ ...address, state: 'read', controls: observed.controls, apiRoutes });
     } catch { pages.push({ ...address, state: 'unavailable' }); }
   }
-  return { schemaVersion: 1, checkedAt: new Date().toISOString(), identity: 'not_connected', publishing: 'not_connected', comments: 'not_connected', pages };
+  return { schemaVersion: 2, checkedAt: new Date().toISOString(), identity: 'not_observed', publishing: 'not_connected', comments: 'not_connected', pages };
 }

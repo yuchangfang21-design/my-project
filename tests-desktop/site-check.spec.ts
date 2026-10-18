@@ -52,7 +52,7 @@ test('site check reports official page structure without credentials, personal t
     }, dir);
     expect(result.supported).toBe(true);
     expect(result).toMatchObject({ writes: 0, unopenedRejected: true, invalidRejected: true, connectionUnchanged: true, unchanged: { input: 'PRIVATE_INPUT', submitted: false } });
-    expect(result.report).toMatchObject({ schemaVersion: 1, identity: 'not_connected', publishing: 'not_connected', comments: 'not_connected', pages: [{ site: 'creator', route: '/creator-micro/home', state: 'read', controls: { fileInputs: 1, editors: 1, publish: 1, reply: 1 }, apiRoutes: ['/web/api/user/[segment]'] }] });
+    expect(result.report).toMatchObject({ schemaVersion: 2, identity: 'not_observed', publishing: 'not_connected', comments: 'not_connected', pages: [{ site: 'creator', route: '/creator-micro/home', state: 'read', controls: { fileInputs: 1, editors: 1, publish: 1, reply: 1 }, apiRoutes: ['/web/api/user/[segment]'] }] });
     expect(result.foreign).toMatchObject({ pages: [{ site: 'other', route: null, state: 'not_inspected' }] });
     const exported = JSON.stringify([result.report, result.foreign]);
     for (const secret of ['PRIVATE_', '不应导出的账号名称', 'sessionid', 'token=', 'outside.invalid']) expect(exported).not.toContain(secret);
@@ -72,12 +72,12 @@ test('site check has an explicit desktop action and keeps unverified capabilitie
     await expect(page.getByRole('status').filter({ hasText: '未打开账号登录窗口' })).toBeVisible();
     await app.evaluate(({ ipcMain }) => {
       ipcMain.removeHandler('xumu:site-check');
-      ipcMain.handle('xumu:site-check', () => ({ schemaVersion: 1, checkedAt: new Date().toISOString(), identity: 'not_connected', publishing: 'not_connected', comments: 'not_connected', pages: [{ site: 'creator', route: '/creator-micro/home', state: 'read', controls: { fileInputs: 0, editors: 0, publish: 0, reply: 0, login: 0 }, apiRoutes: [] }] }));
+      ipcMain.handle('xumu:site-check', () => ({ schemaVersion: 2, checkedAt: new Date().toISOString(), identity: 'not_observed', publishing: 'not_connected', comments: 'not_connected', pages: [{ site: 'creator', route: '/creator-micro/home', state: 'read', controls: { fileInputs: 0, editors: 0, publish: 0, reply: 0, login: 0 }, apiRoutes: [] }] }));
     });
     await page.getByRole('button', { name: '生成接入检查', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('heading', { name: '官方页面接入检查' })).toBeVisible();
-    await expect(dialog.getByLabel('接入检查报告')).toHaveValue(/"identity": "not_connected"/);
+    await expect(dialog.getByLabel('接入检查报告')).toHaveValue(/"identity": "not_observed"/);
     await expect(dialog.getByText('报告不会确认登录，也不会启用发布或评论。', { exact: true })).toBeVisible();
     await dialog.getByRole('button', { name: '关闭检查', exact: true }).click();
     await expect(dialog).toHaveCount(0);

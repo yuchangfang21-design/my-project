@@ -2,9 +2,9 @@ import { chromium, type BrowserContext, type Page } from 'playwright-core';
 import { existsSync } from 'node:fs';
 import { lstat, mkdir, realpath } from 'node:fs/promises';
 import { join, sep } from 'node:path';
-import { CREATOR_URL, observeIdentity } from './douyin.js';
+import { CREATOR_URL, readIdentity } from './douyin.js';
 import { inspectOfficialPages } from './site-check.js';
-import type { AccountSiteCheck } from '../../shared/site-check-contracts.js';
+import type { AccountSiteCheck, IdentityReadSummary } from '../../shared/site-check-contracts.js';
 import { id } from '../validation.js';
 import { randomUUID } from 'node:crypto';
 import type { Repository } from '../storage/repository.js';
@@ -22,6 +22,7 @@ export class SessionManager {
   private contexts = new Map<string, BrowserContext>();
   private contextIds = new Map<string,string>();
   private opening = new Map<string, Promise<LoginObservation>>();
+  private identityReads = new Map<string, IdentityReadSummary>();
   private disposed = false;
   constructor(private profileRoot: string, private repository: Repository, private dependencies: Dependencies = {}) {
     for (const account of repository.snapshot().accounts) {
@@ -67,20 +68,25 @@ export class SessionManager {
       }
       return prior;
     }
-    const page=context.pages()[0];let identity:Identity|null=null;
-    try{if(page)identity=await (this.dependencies.observe||observeIdentity)(page);}catch{identity=null;}
-    let observation:LoginObservation={...prior,status:'pending_confirmation',reason:'软件尚未接入账号身份识别；网页登录成功后也暂时保持待确认。可点击“生成接入检查”协助完成接入。'};
+    const page=context.pages().find(page=>{try{return new URL(page.url()).origin==='https://creator.douyin.com';}catch{return false;}}) || context.pages()[0];let identity:Identity|null=null;
+    let summary:IdentityReadSummary={status:'not_checked'};
+    try{if(page){if(this.dependencies.observe)identity=await this.dependencies.observe(page);else{const result=await readIdentity(page);identity=result.identity;summary=result.summary;}}}catch{summary={status:'unavailable'};}
+    const reasons:Partial<Record<IdentityReadSummary['status'],string>>={endpoint_unseen:'当前页面尚未观察到账号信息接口。请在官方创作者首页完成登录后，点击“检查状态”。',unsupported_response:'已读取账号接口，但响应字段尚未匹配。请生成接入检查报告，报告仅包含字段类型。',not_authenticated:'账号接口拒绝访问或未确认登录，请在官方浏览器中核对后重试。',unavailable:'暂时无法读取官方账号信息，请检查浏览器与网络后重试。',page_changed:'账号页面已切换，本次核实已停止，请重试。'};
+    let observation:LoginObservation={...prior,status:'pending_confirmation',reason:reasons[summary.status]||'请在官方页面完成登录后，点击“检查状态”核实当前账号。'};
     if(identity&&typeof identity.remoteId==='string'&&identity.remoteId&&identity.remoteId.length<=200&&typeof identity.displayName==='string'&&identity.displayName&&Number.isFinite(Date.parse(identity.observedAt))){
       const duplicate=this.repository.snapshot().accounts.find(a=>a.id!==accountId&&a.identity?.remoteId===identity.remoteId);
-      if(prior.identity&&prior.identity.remoteId!==identity.remoteId)observation.reason='当前账号与之前绑定的身份不一致，请核对后重新登录。';
-      else if(duplicate)observation.reason='该身份已绑定其他账号档案，请勿重复绑定。';
+      if(prior.identity&&prior.identity.remoteId!==identity.remoteId){observation.reason='当前账号与之前绑定的身份不一致，请核对后重新登录。';summary={...summary,status:'identity_mismatch'};}
+      else if(duplicate){observation.reason='该身份已绑定其他账号档案，请勿重复绑定。';summary={...summary,status:'duplicate_identity'};}
       else observation={accountId,status:'logged_in',identity};
     }
-    this.repository.recordConnection(observation);return observation;
+    this.identityReads.set(accountId,{...summary,checkedAt:new Date().toISOString()});this.repository.recordConnection(observation);return observation;
   }
   async close(accountId:string):Promise<void>{id(accountId);await this.opening.get(accountId)?.catch(()=>undefined);await this.contexts.get(accountId)?.close();}
   async inspect(accountId: string): Promise<AccountSiteCheck> {
-    return this.withAccountPage(accountId, page => inspectOfficialPages(page.context()));
+    return this.withAccountPage(accountId, async page => {
+      const report=await inspectOfficialPages(page.context());
+      return {...report,identity:this.repository.getConnection(accountId).status==='logged_in'?'observed':'not_observed',identityRead:this.identityReads.get(accountId)||{status:'not_checked'}};
+    });
   }
   async withAccountPage<T>(accountId:string,action:(page:Page,contextId:string)=>Promise<T>):Promise<T>{
     id(accountId);if(this.disposed)throw new Error('应用正在关闭');

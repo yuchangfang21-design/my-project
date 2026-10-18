@@ -6,10 +6,16 @@ export type SitePageCheck = {
   apiRoutes?: string[];
 };
 export type AccountSiteCheck = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   checkedAt: string;
-  identity: 'not_connected';
+  identity: 'not_observed' | 'observed';
+  identityRead?: IdentityReadSummary;
   publishing: 'not_connected';
   comments: 'not_connected';
   pages: SitePageCheck[];
+};
+export type IdentityReadSummary = {
+  checkedAt?: string;
+  status: 'not_checked' | 'verified' | 'endpoint_unseen' | 'unsupported_response' | 'not_authenticated' | 'unavailable' | 'page_changed' | 'identity_mismatch' | 'duplicate_identity';
+  fields?: { root: Record<string, string>; data: Record<string, string> };
 };

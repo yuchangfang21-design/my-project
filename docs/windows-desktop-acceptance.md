@@ -14,12 +14,12 @@ HTML 演示与桌面版数据相互独立。桌面版首次启动为空，不包
 
 工作流会安装锁定依赖和官方 Electron，执行浏览器测试、实际 Electron 桌面测试，打包 Windows x64，再启动打包后的程序验证 SQLite 与重启。仅在步骤成功后上传 **Xumu-Windows-x64** 构建产物。
 
-也可以由开发者主动推送 `desktop-build-*` 标签触发一次 Windows 构建；该标签只触发测试和私有仓库产物上传，不创建公开 Release。当前云端 GitHub API 请求被拒绝，推送 Git 成功不能代替 Actions 成功；需要在 Actions 页面查看实际结果。
+也可以由开发者主动推送 `desktop-build-*` 标签触发一次 Windows 构建；该标签只触发测试和仓库构建产物上传，不创建公开 Release。当前云端 GitHub API 请求被拒绝，推送 Git 成功不能代替 Actions 成功；需要在 Actions 页面查看实际结果。
 
 若需要在 Windows 本机从源码构建，安装 Node.js 24、Chrome 或 Edge，在项目目录执行：
 
 ```powershell
-npm ci
+npm ci --ignore-scripts
 npm run desktop:prepare
 npx playwright install chromium
 npm test

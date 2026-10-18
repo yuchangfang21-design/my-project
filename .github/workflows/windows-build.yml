@@ -40,6 +40,7 @@ jobs:
             $packageHash = Get-FileHash $_.FullName -Algorithm SHA256
             '{0}  {1}' -f $packageHash.Hash.ToLowerInvariant(), $_.Name
           } | Set-Content -Path release/SHA256SUMS.txt -Encoding ascii
+          Get-Content release/SHA256SUMS.txt | ForEach-Object { Write-Output "::notice title=Windows installer SHA-256::$_" }
       - uses: actions/upload-artifact@v4
         with:
           name: Xumu-Windows-x64

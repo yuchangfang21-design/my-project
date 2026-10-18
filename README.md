@@ -1,6 +1,6 @@
 # 序幕 · 创作者工作台
 
-Windows 多账号运营工具，包含已确认的 HTML 界面演示和 **0.4.0 Electron 桌面版**。桌面版可持久保存账号、真实视频副本和本地任务，并管理独立的账号登录浏览器。支持发布文案、逐任务核对与中断恢复；新增按账号归属的评论工作台、500ms草稿保存、逐条回复核对和未知结果恢复。真实身份解析、远端发布、评论读取与回复仍待官方实测，私信尚未接通。
+Windows 多账号运营工具，包含已确认的 HTML 界面演示和 **0.4.1 Electron 桌面版**。桌面版可持久保存账号、真实视频副本和本地任务，并管理独立的账号登录浏览器。支持发布文案、逐任务核对与中断恢复；新增按账号归属的评论工作台、500ms草稿保存、逐条回复核对和未知结果恢复。真实身份解析、远端发布、评论读取与回复仍待官方实测，私信尚未接通。
 
 ## 桌面版
 
@@ -22,7 +22,7 @@ npm run test:packaged
 
 Linux 图形测试需要 Xvfb 或已有 DISPLAY，缺少默认 Xvfb 时可设置 `XUMU_XVFB_PATH`。Windows 不使用 Xvfb。SQLite 13 使用 npm 包中已验证可由 Electron 加载的 Node-API 预编译模块；不执行多余的 ABI 重编译。
 
-**Windows跟进：** 已通过GitHub网页确认0.4.0原生构建在桌面测试步骤失败，暂没有可确认的安装包；具体证据及诊断改动见[Windows构建跟进](docs/windows-build-followup.md)。
+**Windows跟进：** 已确认并修复Windows短路径导致的素材误拒绝，并补齐明确宽度的界面回归；0.4.1原生构建待验证，暂没有可确认的安装包。证据及验证进展见[Windows构建跟进](docs/windows-build-followup.md)。
 
 Windows 原生构建入口是仓库 Actions 的 **Build Windows desktop**。安装包实际生成并通过测试后，工作流提供 **Xumu-Windows-x64** 产物。构建未配置开发者签名，未运行的 Windows 验收不算通过；详见 [Windows 验收步骤](docs/windows-desktop-acceptance.md)。
 

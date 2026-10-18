@@ -14,6 +14,19 @@ const managedFile = new RegExp(`^${managedName}\\.(mp4|mov)$`);
 const temporaryFile = new RegExp(`^\\.${managedName}\\.tmp$`);
 type ManagedAsset = { asset: DesktopAsset; relativePath: string };
 
+async function checkSourceDirectories(source: string): Promise<void> {
+  // Windows 8.3 names and case aliases can have a different realpath spelling.
+  // Inspect each directory itself so aliases work without admitting symlinks/junctions.
+  let directory = dirname(source);
+  for (;;) {
+    const stat = await lstat(directory);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error('不允许符号链接或非普通文件');
+    const parent = dirname(directory);
+    if (parent === directory) return;
+    directory = parent;
+  }
+}
+
 export class MediaLibrary {
   private queue: Promise<unknown> = Promise.resolve();
   private initialization?: Promise<void>;
@@ -69,7 +82,7 @@ export class MediaLibrary {
       const initial = await lstat(file);
       if (initial.isSymbolicLink() || !initial.isFile()) return 'corrupt';
       handle = await open(file, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
-      const stat = await handle.stat(); if (!stat.isFile() || stat.ino !== initial.ino) return 'corrupt';
+      const stat = await handle.stat(); if (!stat.isFile() || stat.ino !== initial.ino || stat.dev !== initial.dev) return 'corrupt';
       const hash = createHash('sha256');
       for await (const chunk of handle.createReadStream({ autoClose: false, signal: this.abort.signal })) hash.update(chunk);
       const after = await handle.stat();
@@ -103,10 +116,12 @@ export class MediaLibrary {
       let handle: Awaited<ReturnType<typeof open>> | undefined;
       try {
         if (typeof path !== 'string' || !['.mp4','.mov'].includes(extname(path).toLowerCase())) throw new Error('只支持 MP4 或 MOV');
-        const initial = await lstat(path);
-        if (initial.isSymbolicLink() || !initial.isFile() || await realpath(dirname(path)) !== resolve(dirname(path))) throw new Error('不允许符号链接或非普通文件');
-        handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
-        const stat = await handle.stat(); if (initial.ino !== stat.ino || !stat.isFile() || stat.size < 12) throw new Error('文件为空或内容无效');
+        const source = resolve(path);
+        const initial = await lstat(source);
+        if (initial.isSymbolicLink() || !initial.isFile()) throw new Error('不允许符号链接或非普通文件');
+        await checkSourceDirectories(source);
+        handle = await open(source, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
+        const stat = await handle.stat(); if (initial.ino !== stat.ino || initial.dev !== stat.dev || !stat.isFile() || stat.size < 12) throw new Error('文件为空或内容无效');
         const header = Buffer.alloc(12); await handle.read(header,0,12,0);
         if (!['ftyp','moov','mdat','wide','free','skip'].includes(header.toString('ascii',4,8))) throw new Error('未识别到 MP4/MOV 容器头');
         const assetId = randomUUID(); const extension = extname(path).toLowerCase();

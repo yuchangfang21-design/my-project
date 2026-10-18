@@ -17,7 +17,9 @@ test('media imports Unicode paths, rejects unsafe files, deduplicates and surviv
       const copy=p.join(root,'相同内容.mov'); fs.writeFileSync(copy,data);
       const bad=p.join(root,'fake.mp4'); fs.writeFileSync(bad,'not a video'); const empty=p.join(root,'empty.mp4'); fs.writeFileSync(empty,'');
       const link=p.join(root,'alias.mp4'); if(process.platform!=='win32')fs.symlinkSync(source,link);
-      const first=await media.importFiles([source,copy,bad,empty,...(process.platform==='win32'?[]:[link]),p.join(root,'missing.mp4')]);
+      const target=p.join(root,'original','nested');fs.mkdirSync(target,{recursive:true});fs.writeFileSync(p.join(target,'video.mp4'),data);
+      const linked=p.join(root,'directory-alias');fs.symlinkSync(p.join(root,'original'),linked,process.platform==='win32'?'junction':'dir');
+      const first=await media.importFiles([source,copy,...(process.platform==='win32'?[copy.toUpperCase()]:[]),bad,empty,...(process.platform==='win32'?[]:[link]),p.join(linked,'nested','video.mp4'),p.join(root,'missing.mp4')]);
       if(first.added!==1){const{inspectFixtureFile}=require(p.join(process.cwd(),'tests-desktop/media-diagnostics.cjs'));throw new Error('Fixture media import failed: '+JSON.stringify(first)+'; fixture file evidence: '+JSON.stringify(await inspectFixtureFile(source)));}
       fs.unlinkSync(source); const snapshot=repo.snapshot(); const asset=snapshot.assets[0];
       const account=repo.createAccount({name:'真实账号',group:'门店'});
@@ -28,9 +30,11 @@ test('media imports Unicode paths, rejects unsafe files, deduplicates and surviv
       const noTemp=fs.readdirSync(p.join(dataDir,'media')).every((f:string)=>!f.endsWith('.tmp'));
       const taskTitle=repo.snapshot().tasks[0].title; repo.cancelTask(tasks[0].id);repo.close();
       const reopen=new Repository(dataDir);reopen.initialize();const persisted=reopen.snapshot();reopen.close();
-      return{first,count:snapshot.assets.length,hashMatches:hash===asset.sha256,noTemp,taskTitle,duplicate,status:persisted.tasks[0].status,expectedFailures:process.platform==='win32'?3:4};
+      return{first,count:snapshot.assets.length,hashMatches:hash===asset.sha256,noTemp,taskTitle,duplicate,status:persisted.tasks[0].status,expectedFailures:process.platform==='win32'?4:5,expectedDuplicates:process.platform==='win32'?2:1};
     }, dir);
-    expect(result.first.added).toBe(1);expect(result.first.duplicates).toBe(1);expect(result.first.failures).toHaveLength(result.expectedFailures);
+    expect(result.first.added).toBe(1);expect(result.first.duplicates).toBe(result.expectedDuplicates);expect(result.first.failures).toHaveLength(result.expectedFailures);
+    expect(result.first.failures.map(f=>f.filename)).toEqual(['fake.mp4','empty.mp4',...(process.platform==='win32'?[]:['alias.mp4']),'video.mp4','missing.mp4']);
+    expect(result.first.failures.find(f=>f.filename==='video.mp4')?.reason).toBe('不允许符号链接或非普通文件');
     expect(result).toMatchObject({count:1,hashMatches:true,noTemp:true,taskTitle:'任务快照标题',duplicate:true,status:'cancelled'});
   } finally { await app.close();await rm(dir,{recursive:true,force:true}); }
 });

@@ -35,8 +35,10 @@ async function main(){
  const passed=entries.filter(({test})=>test.status==='expected'&&test.expectedStatus==='passed'&&test.results?.at(-1)?.status==='passed').length;
  const skipped=entries.filter(({test})=>test.status==='skipped').length;
  const expectedFailures=entries.filter(({test})=>test.status==='expected'&&test.expectedStatus==='failed').length;
- const errors=report.errors??[],commands=[];
- let summary=`## Windows 桌面测试\n\n通过：${passed} · 失败：${failures.length} · 跳过：${skipped} · 不稳定：${flaky} · 预期失败：${expectedFailures} · 运行器错误：${errors.length}\n`;
+ const errors=report.errors??[];
+ const totals=`通过：${passed} · 失败：${failures.length} · 跳过：${skipped} · 不稳定：${flaky} · 预期失败：${expectedFailures} · 运行器错误：${errors.length}`;
+ const commands=[`::notice title=Desktop test totals::${annotation(totals)}`];
+ let summary=`## Windows 桌面测试\n\n${totals}\n`;
  if(!entries.length)summary+='\n没有执行任何桌面用例，不能据此判定通过。\n';
  for(const{spec,test,title}of failures){
   const result=test.results?.at(-1),detail=message(result?.error?.message??result?.errors?.[0]?.message??result?.status??'未提供详细错误');

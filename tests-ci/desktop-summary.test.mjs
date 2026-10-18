@@ -27,7 +27,7 @@ test('CI reports skipped tests separately from successful tests',async()=>{
 });
 test('CI escapes annotation commands and strips terminal colors',async()=>{
  const output=await run(report([{status:'unexpected',expectedStatus:'passed',results:[{status:'failed',error:{message:'\u001b[31m失败 100%\u001b[0m\n::warning::not-a-command'}}]}]));
- assert.equal(output.status,0,output.stderr);assert.equal(output.stdout.trim().split('\n').length,1);assert.match(output.stdout,/失败 100%25%0A::warning::not-a-command/);assert.doesNotMatch(output.stdout+output.summary,/\u001b/);
+ assert.equal(output.status,0,output.stderr);assert.equal(output.stdout.trim().split('\n').length,2);assert.match(output.stdout,/失败 100%25%0A::warning::not-a-command/);assert.doesNotMatch(output.stdout+output.summary,/\u001b/);
 });
 test('CI clearly reports a missing results file instead of claiming a zero-test success',async()=>{
  const output=await run(undefined);assert.equal(output.status,0,output.stderr);assert.match(output.summary,/未生成桌面测试报告/);assert.match(output.stdout,/::warning::/);assert.doesNotMatch(output.summary,/全部通过/);
@@ -43,4 +43,9 @@ test('CI maps absolute Windows source locations back into the repository',async(
 test('CI never annotates a source location outside the desktop test directory',async()=>{
  const input=report([{status:'unexpected',expectedStatus:'passed',results:[{status:'failed',error:{message:'Rejected location'}}]}]);input.suites[0].specs[0].file='../private.txt';
  const output=await run(input);assert.equal(output.status,0,output.stderr);assert.doesNotMatch(output.stdout,/file=/);assert.match(output.stdout,/::error title=/);
+});
+
+test('CI exposes complete totals even when GitHub limits per-step error annotations',async()=>{
+ const input=report(Array.from({length:12},()=>({status:'unexpected',expectedStatus:'passed',results:[{status:'failed',error:{message:'Fixture failure'}}]})));
+ const output=await run(input);assert.equal(output.status,0,output.stderr);assert.match(output.stdout,/::notice title=Desktop test totals::通过：0 · 失败：12 · 跳过：0/);assert.match(output.summary,/失败：12/);
 });

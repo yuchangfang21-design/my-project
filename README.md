@@ -37,6 +37,7 @@ Windows 原生构建入口是仓库 Actions 的 **Build Windows desktop**。安�
 - [统一消息工作台效果图](artifacts/design-inbox-workbench.png)
 - [下载设计稿包](artifacts/xumu-next-stage-design.zip)：下载原始 ZIP 后解压，用 Edge 或 Chrome 打开 `index.html`，无需安装依赖。
 - [详细流程设计](docs/superpowers/specs/2026-10-17-publishing-and-inbox-experience-design.md)
+- [发布阶段 A 实施计划](docs/superpowers/plans/2026-10-17-publishing-stage-a.md)：数据库迁移、提交记录、确认与恢复、桌面接入和 Windows 实测，待评审后沿用直接开发方式执行。
 
 ## 直接查看效果
 

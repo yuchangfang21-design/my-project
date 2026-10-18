@@ -46,7 +46,7 @@ test('comments storage rolls back schema2 migration failure and keeps foreign ke
  finally{await app.close();await rm(dir,{recursive:true,force:true});}
 });
 test('comments storage refuses schema2 migration when backup cannot be created',async()=>{
- test.skip(process.platform==='win32','Windows backup ACL requires native acceptance');const dir=await mkdtemp(join(tmpdir(),'xumu-comments-backup-')),app=await launchDesktop(dir);
+ const dir=await mkdtemp(join(tmpdir(),'xumu-comments-backup-')),app=await launchDesktop(dir);
  try{const result=await app.evaluate(async(_e,root)=>{
   const require=process.getBuiltinModule('module')!.createRequire(process.cwd()+'/package.json'),p=require('node:path'),fs=require('node:fs');const{seedV2}=require(p.join(process.cwd(),'tests-desktop/comments-fixtures.cjs'));const{migrateDatabase}=require(p.join(process.cwd(),'dist-desktop/desktop/storage/migrations.js'));const data=p.join(root,'legacy'),old=seedV2(data);fs.chmodSync(data,0o500);
   try{let rejected=false;try{migrateDatabase(old.db,data);}catch{rejected=true;}return{rejected,version:old.db.pragma('user_version',{simple:true}),tasks:old.db.prepare('SELECT COUNT(*) AS n FROM tasks').get().n};}finally{fs.chmodSync(data,0o700);old.db.close();}

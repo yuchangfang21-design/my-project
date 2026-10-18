@@ -1,0 +1,40 @@
+name: Verify Windows migration permissions
+on:
+  push:
+    tags:
+      - 'desktop-permissions-*'
+permissions:
+  contents: read
+jobs:
+  windows-permissions:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run desktop:prepare
+      - name: Check migration backup permissions
+        id: permission_tests
+        run: npm run test:desktop -- --grep 'backup cannot' --reporter=list,json
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: desktop-test-results/permission-results.json
+      - name: Summarize permission checks
+        if: always()
+        run: node scripts/summarize-desktop-results.mjs desktop-test-results/permission-results.json
+      - name: Run full desktop regression
+        run: npm run test:desktop -- --reporter=list,json
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: desktop-test-results/results.json
+      - name: Summarize full regression
+        if: always() && steps.permission_tests.outcome == 'success'
+        run: node scripts/summarize-desktop-results.mjs desktop-test-results/results.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Windows-permission-test-results
+          path: desktop-test-results
+          if-no-files-found: error

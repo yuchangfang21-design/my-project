@@ -34,6 +34,7 @@ export function registerIpc(window: BrowserWindow, repository: Repository, media
   handle('xumu:open-account', accountId => coordinator.run(()=>sessions.open(accountId)));
   handle('xumu:close-account', accountId => coordinator.run(()=>sessions.close(accountId)));
   handle('xumu:connection', accountId => coordinator.run(()=>sessions.refresh(accountId)));
+  handle('xumu:site-check', accountId => coordinator.run(()=>sessions.inspect(accountId)));
   handle('xumu:publish-review',input=>publishing.reviewPublish(input));
   handle('xumu:publish-start',input=>publishing.startPublish(input));
   handle('xumu:publish-pause',batchId=>publishing.pausePublishing(batchId));

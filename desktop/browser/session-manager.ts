@@ -3,6 +3,8 @@ import { existsSync } from 'node:fs';
 import { lstat, mkdir, realpath } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { CREATOR_URL, observeIdentity } from './douyin.js';
+import { inspectOfficialPages } from './site-check.js';
+import type { AccountSiteCheck } from '../../shared/site-check-contracts.js';
 import { id } from '../validation.js';
 import { randomUUID } from 'node:crypto';
 import type { Repository } from '../storage/repository.js';
@@ -67,7 +69,7 @@ export class SessionManager {
     }
     const page=context.pages()[0];let identity:Identity|null=null;
     try{if(page)identity=await (this.dependencies.observe||observeIdentity)(page);}catch{identity=null;}
-    let observation:LoginObservation={...prior,status:'pending_confirmation',reason:'登录浏览器已打开；身份识别尚未完成实机验证，请在官方页面确认账号。'};
+    let observation:LoginObservation={...prior,status:'pending_confirmation',reason:'软件尚未接入账号身份识别；网页登录成功后也暂时保持待确认。可点击“生成接入检查”协助完成接入。'};
     if(identity&&typeof identity.remoteId==='string'&&identity.remoteId&&identity.remoteId.length<=200&&typeof identity.displayName==='string'&&identity.displayName&&Number.isFinite(Date.parse(identity.observedAt))){
       const duplicate=this.repository.snapshot().accounts.find(a=>a.id!==accountId&&a.identity?.remoteId===identity.remoteId);
       if(prior.identity&&prior.identity.remoteId!==identity.remoteId)observation.reason='当前账号与之前绑定的身份不一致，请核对后重新登录。';
@@ -77,6 +79,9 @@ export class SessionManager {
     this.repository.recordConnection(observation);return observation;
   }
   async close(accountId:string):Promise<void>{id(accountId);await this.opening.get(accountId)?.catch(()=>undefined);await this.contexts.get(accountId)?.close();}
+  async inspect(accountId: string): Promise<AccountSiteCheck> {
+    return this.withAccountPage(accountId, page => inspectOfficialPages(page.context()));
+  }
   async withAccountPage<T>(accountId:string,action:(page:Page,contextId:string)=>Promise<T>):Promise<T>{
     id(accountId);if(this.disposed)throw new Error('应用正在关闭');
     if(!this.repository.getAccount(accountId))throw new Error('账号不存在');

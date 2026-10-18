@@ -34,6 +34,7 @@ export interface DesktopApi {
   openAccount(accountId: string): Promise<LoginObservation>;
   closeAccount(accountId: string): Promise<void>;
   getConnection(accountId: string): Promise<LoginObservation>;
+  inspectAccount(accountId: string): Promise<import('./site-check-contracts.js').AccountSiteCheck>;
   reviewPublish(input:{taskIds:string[]}):Promise<import('./publishing-contracts.js').PublishReview>;
   startPublish(input:{reviewId:string}):Promise<import('./publishing-contracts.js').PublishBatch>;
   pausePublishing(batchId:string):Promise<import('./publishing-contracts.js').PublishBatch>;

@@ -26,6 +26,7 @@ const api: DesktopApi = {
   openAccount: accountId => ipcRenderer.invoke('xumu:open-account', accountId),
   closeAccount: accountId => ipcRenderer.invoke('xumu:close-account', accountId),
   getConnection: accountId => ipcRenderer.invoke('xumu:connection', accountId),
+  inspectAccount: accountId => ipcRenderer.invoke('xumu:site-check', accountId),
   reviewPublish:input=>ipcRenderer.invoke('xumu:publish-review',input),
   startPublish:input=>ipcRenderer.invoke('xumu:publish-start',input),
   pausePublishing:batchId=>ipcRenderer.invoke('xumu:publish-pause',batchId),

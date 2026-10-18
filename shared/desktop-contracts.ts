@@ -6,7 +6,7 @@ export type CreateTasksInput = { assetId: string; accountIds: string[]; title: s
 export type ImportReport = { added: number; repaired: number; duplicates: number; failures: { filename: string; reason: string }[] };
 export interface DesktopAccount { id: string; name: string; handle: string; group: string; color: string; initial: string; demo: false; followers: string; loginStatus: LoginStatus; identity?: Identity }
 export interface DesktopAsset { id: string; title: string; filename: string; poster: string; tag: string; duration: string; size: string; imported: true; sha256: string; availability?: 'ready' | 'missing' | 'corrupt' }
-export interface DesktopTask { id: string; accountId: string; assetId: string; title: string; status: 'pending' | 'cancelled'; time: string }
+export interface DesktopTask { id: string; accountId: string; assetId: string; title: string; status: import('./publishing-contracts.js').PublishStatus; time: string; revision: number; description: string; tags: string[]; assetSha256: string; receipt?: import('./publishing-contracts.js').PublicationReceipt; repostOf?: string }
 export interface WorkspaceSnapshot { version: 1; accounts: DesktopAccount[]; assets: DesktopAsset[]; tasks: DesktopTask[]; messages: [] }
 export interface DesktopApi {
   getRuntime(): Promise<{ mode: 'desktop'; version: string }>;

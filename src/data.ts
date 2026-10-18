@@ -1,5 +1,5 @@
 export type Page = 'overview' | 'accounts' | 'assets' | 'tasks' | 'messages' | 'settings';
-export type TaskStatus = 'pending' | 'running' | 'demo_done' | 'review' | 'cancelled';
+export type TaskStatus = import('../shared/publishing-contracts').PublishStatus | 'demo_done';
 export interface Account { id: string; name: string; handle: string; group: string; color: string; initial: string; demo: boolean; followers: string; loginStatus?: import('../shared/desktop-contracts').LoginStatus; identity?: import('../shared/desktop-contracts').Identity; }
 export interface Asset { id: string; title: string; filename: string; poster: string; tag: string; duration: string; size: string; imported: boolean; availability?: 'ready' | 'missing' | 'corrupt' }
 export interface Task { id: string; accountId: string; assetId: string; title: string; status: TaskStatus; time: string; }
@@ -56,4 +56,4 @@ export function loadWorkspace(): Workspace {
   }
 }
 
-export const statusLabels: Record<TaskStatus, string> = { pending: '待执行', running: '演示运行中', demo_done: '演示已完成', review: '待核对', cancelled: '已取消' };
+export const statusLabels: Record<TaskStatus, string> = { pending: '待执行', running: '演示运行中', demo_done: '演示已完成', review: '待核对', cancelled: '已取消', waiting_login:'等待登录', submitted:'已提交 · 审核中', published:'已发布', rejected:'发布受限 / 未通过审核', failed:'失败' };

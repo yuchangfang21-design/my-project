@@ -17,3 +17,6 @@
 
 
 首次原生ACL运行 [39121671116](https://github.com/yuchangfang21-design/my-project/actions/runs/39121671116)，源码 `dbf448b`，在Get-Acl自动加载Microsoft.PowerShell.Security模块时失败，尚未修改ACL、未进入拒写验证。接下来显式Import-Module同名模块以显示内部加载错误；该步用于定位工具链，不改产品迁移逻辑。
+
+
+显式导入探测 [39121881123](https://github.com/yuchangfang21-design/my-project/actions/runs/39121881123)，源码 `5576d16`，显示ObjectSecurity的Access/Sddl等扩展类型成员重复。工作流父shell为PowerShell7，而夹具明确启动Windows PowerShell5。当前只在子进程环境中移除继承的PSModulePath，让其重建自身默认路径，同时以宿主PSHOME下的绝对manifest导入系统Security模块；不忽略类型错误，不修改用户或机器环境配置。该诊断尚需后续原生结果确认。

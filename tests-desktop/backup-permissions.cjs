@@ -20,9 +20,14 @@ function scopedDirectory(root, directory) {
 }
 function powershell(directory, command, extra = {}) {
   const executable = path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-  return execFileSync(executable, ['-NoProfile', '-NonInteractive', '-Command', "$ErrorActionPreference='Stop';Import-Module Microsoft.PowerShell.Security -ErrorAction Stop;$target=$env:XUMU_TEST_ACL_DIRECTORY;" + command], {
+  const childEnvironment = { ...process.env, XUMU_TEST_ACL_DIRECTORY: directory, ...extra };
+  // A caller launched from PowerShell 7 can otherwise select Core modules in Windows PowerShell 5.
+  for (const name of Object.keys(childEnvironment)) {
+    if (name.toLowerCase() === 'psmodulepath') delete childEnvironment[name];
+  }
+  return execFileSync(executable, ['-NoProfile', '-NonInteractive', '-Command', "$ErrorActionPreference='Stop';Import-Module ([IO.Path]::Combine($PSHOME,'Modules','Microsoft.PowerShell.Security','Microsoft.PowerShell.Security.psd1')) -ErrorAction Stop;$target=$env:XUMU_TEST_ACL_DIRECTORY;" + command], {
     encoding: 'utf8', windowsHide: true, timeout: 10000,
-    env: { ...process.env, XUMU_TEST_ACL_DIRECTORY: directory, ...extra },
+    env: childEnvironment,
   }).trim();
 }
 function windowsRestore(directory, descriptor) {

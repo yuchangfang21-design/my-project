@@ -4,6 +4,7 @@ import { lstat, mkdir, realpath } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { CREATOR_URL, observeIdentity } from './douyin.js';
 import { id } from '../validation.js';
+import { randomUUID } from 'node:crypto';
 import type { Repository } from '../storage/repository.js';
 import type { Identity, LoginObservation } from '../../shared/desktop-contracts.js';
 
@@ -17,6 +18,7 @@ export function findBrowser(): string {
 type Dependencies = { launch?: (profile: string) => Promise<BrowserContext>; observe?: (page: Page) => Promise<Identity | null> };
 export class SessionManager {
   private contexts = new Map<string, BrowserContext>();
+  private contextIds = new Map<string,string>();
   private opening = new Map<string, Promise<LoginObservation>>();
   private disposed = false;
   constructor(private profileRoot: string, private repository: Repository, private dependencies: Dependencies = {}) {
@@ -43,7 +45,8 @@ export class SessionManager {
       const context = await (this.dependencies.launch ? this.dependencies.launch(profile) : chromium.launchPersistentContext(profile,{ executablePath:findBrowser(),headless:false,viewport:null }));
       if (this.disposed) { await context.close(); throw new Error('应用正在关闭'); }
       this.contexts.set(accountId,context);
-      context.once('close',()=>{ if(this.contexts.get(accountId)===context)this.contexts.delete(accountId);if(!this.disposed){try{const connection=this.repository.getConnection(accountId);this.repository.recordConnection({...connection,status:'pending_confirmation',reason:'浏览器已关闭，下次打开时重新核实账号。'});}catch{ /* repository may already be closed during shutdown */ }} });
+      this.contextIds.set(accountId,randomUUID());
+      context.once('close',()=>{ if(this.contexts.get(accountId)===context){this.contexts.delete(accountId);this.contextIds.delete(accountId);}if(!this.disposed){try{const connection=this.repository.getConnection(accountId);this.repository.recordConnection({...connection,status:'pending_confirmation',reason:'浏览器已关闭，下次打开时重新核实账号。'});}catch{ /* repository may already be closed during shutdown */ }} });
       const page=context.pages()[0] || await context.newPage();page.setDefaultTimeout(5000);
       let navigationFailed=false;try{await page.goto(CREATOR_URL,{waitUntil:'domcontentloaded',timeout:20000});}catch{navigationFailed=true;}
       const observed=await this.refresh(accountId);
@@ -74,5 +77,12 @@ export class SessionManager {
     this.repository.recordConnection(observation);return observation;
   }
   async close(accountId:string):Promise<void>{id(accountId);await this.opening.get(accountId)?.catch(()=>undefined);await this.contexts.get(accountId)?.close();}
-  async closeAll():Promise<void>{this.disposed=true;await Promise.allSettled([...this.opening.values()]);await Promise.allSettled([...this.contexts.values()].map(context=>context.close()));this.contexts.clear();}
+  async withAccountPage<T>(accountId:string,action:(page:Page,contextId:string)=>Promise<T>):Promise<T>{
+    id(accountId);if(this.disposed)throw new Error('应用正在关闭');
+    if(!this.repository.getAccount(accountId))throw new Error('账号不存在');
+    const page=this.contexts.get(accountId)?.pages()[0],contextId=this.contextIds.get(accountId);
+    if(!page||page.isClosed()||!contextId)throw new Error('未打开账号登录窗口，请先扫码并核实身份');
+    return action(page,contextId);
+  }
+  async closeAll():Promise<void>{this.disposed=true;await Promise.allSettled([...this.opening.values()]);await Promise.allSettled([...this.contexts.values()].map(context=>context.close()));this.contexts.clear();this.contextIds.clear();}
 }

@@ -40,6 +40,18 @@ export class MediaLibrary {
       if (availability !== 'ready') throw new Error('素材文件不可用，请重新导入原视频后重试');
     });
   }
+  verifiedPath(assetId:string,expectedSha256:string):Promise<string>{
+    return this.enqueue(async()=>{
+      id(assetId);
+      if(typeof expectedSha256!=='string'||!/^[0-9a-f]{64}$/.test(expectedSha256))throw new Error('素材指纹无效');
+      await this.initialize();
+      const entry=this.repository.managedAssets().find(entry=>entry.asset.id===assetId);
+      if(!entry||entry.asset.sha256!==expectedSha256)throw new Error('素材已变化，请重新核对');
+      const availability=await this.verify(entry);this.repository.setAssetAvailability(assetId,availability);
+      if(availability!=='ready')throw new Error('素材文件不可用，请重新导入原视频后重试');
+      return this.managedPath(entry.relativePath);
+    });
+  }
   async close(): Promise<void> {
     this.closing = true; this.abort.abort();
     await this.initialization?.catch(() => undefined);

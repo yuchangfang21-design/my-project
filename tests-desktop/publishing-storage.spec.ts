@@ -11,7 +11,7 @@ test('publishing storage migrates WAL records and preserves immutable titles and
   let cancelledEdit=false;try{repo.publishing.updateDraft({taskId:old.tasks[1].id,expectedRevision:1,title:'不得编辑',description:'',tags:[]});}catch{cancelledEdit=true;}
   const backup=fs.readdirSync(dir).find((n:string)=>n.startsWith('workspace-backup-'));const backupDb=new Database(p.join(dir,backup),{readonly:true});const backupRows=backupDb.prepare('SELECT COUNT(*) AS n FROM tasks').get().n;backupDb.close();
   const result={version,wal,ids:tasks.map((t:any)=>t.id).sort(),oldIds:old.tasks.map((t:any)=>t.id).sort(),revisions:tasks.map((t:any)=>t.revision),events:before.events.map((e:any)=>e.summary),title:before.task.title,edited,stale,cancelledEdit,backupRows};repo.close();old.db.close();return result;
- },dir);expect(r.version).toBe(2);expect(r.wal).toBe(true);expect(r.ids).toEqual(r.oldIds);expect(r.revisions).toEqual([1,1]);expect(r.events).toEqual(['历史事件']);expect(r.title).toBe('历史标题0');expect(r.edited).toMatchObject({revision:2,title:'为此账号修改',description:'独立说明',tags:['门店']});expect(r.stale).toBe(true);expect(r.cancelledEdit).toBe(true);expect(r.backupRows).toBe(2);
+ },dir);expect(r.version).toBe(3);expect(r.wal).toBe(true);expect(r.ids).toEqual(r.oldIds);expect(r.revisions).toEqual([1,1]);expect(r.events).toEqual(['历史事件']);expect(r.title).toBe('历史标题0');expect(r.edited).toMatchObject({revision:2,title:'为此账号修改',description:'独立说明',tags:['门店']});expect(r.stale).toBe(true);expect(r.cancelledEdit).toBe(true);expect(r.backupRows).toBe(2);
  }finally{await app.close();await rm(dir,{recursive:true,force:true});}
 });
 test('publishing storage rolls back invalid foreign references and restores foreign key enforcement',async()=>{

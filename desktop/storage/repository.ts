@@ -4,12 +4,14 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { CreateAccountInput, CreateTasksInput, DesktopAccount, DesktopAsset, DesktopTask, WorkspaceSnapshot, LoginObservation } from '../../shared/desktop-contracts.js';
 import { migrateDatabase } from './migrations.js';
+import { CommentStore } from '../comments/store.js';
 import { PublishStore } from './publish-store.js';
 import { id, record, text } from '../validation.js';
 
 export class Repository {
   private db!: Database.Database;
   publishing!: PublishStore;
+  comments!: CommentStore;
   readonly file: string;
   constructor(readonly dataDir: string) { mkdirSync(dataDir, { recursive: true }); this.file = join(dataDir, 'workspace.sqlite'); }
   initialize(): void {
@@ -18,7 +20,7 @@ export class Repository {
       const check = new Database(this.file, { readonly: true, fileMustExist: true });
       try {
         const version = check.pragma('user_version', { simple: true }) as number;
-        if (version > 2) throw new Error('数据库来自较新版本，原文件已保留，请使用对应版本的序幕。');
+        if (version > 3) throw new Error('数据库来自较新版本，原文件已保留，请使用对应版本的序幕。');
         if (version === 0 && (check.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().length)) {
           const backup = join(this.dataDir, `workspace-backup-${randomUUID()}.sqlite`);
           writeFileSync(backup, check.serialize());
@@ -32,6 +34,8 @@ export class Repository {
       migrateDatabase(this.db,this.dataDir);
       this.publishing = new PublishStore(this.db);
       this.publishing.recoverInterrupted();
+      this.comments = new CommentStore(this.db);
+      this.comments.recoverInterrupted();
       this.db.prepare('SELECT id FROM accounts LIMIT 0').all();
       this.db.pragma('journal_mode=WAL');
     } catch (error) { this.db.close(); throw error; }

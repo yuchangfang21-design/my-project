@@ -1,0 +1,16 @@
+import type { Identity } from './desktop-contracts.js';
+export type CommentRecord = { id:string; accountId:string; type:'comment'; ownerRemoteId:string; remoteWorkId:string; remoteThreadId:string; remoteCommentId:string; authorRemoteId:string; authorName:string; text:string; remoteCreatedAt:string; observedAt:string; sourceRevision:number; processed:boolean; availability:'present'|'removed'|'unsupported' };
+export type CommentRecordInput=Omit<CommentRecord,'id'|'accountId'|'type'|'sourceRevision'|'processed'>;
+export type CommentDraft={commentId:string;revision:number;text:string;updatedAt:string};
+export type CommentDraftInput={commentId:string;expectedRevision:number;text:string};
+export type CommentSyncState={accountId:string;state:'never'|'syncing'|'success'|'failed'|'interrupted';lastAttemptAt:string|null;lastSuccessAt:string|null;count:number;coverage:'unknown'|'partial'|'end';errorCode:string|null};
+export type CommentReplyState='draft'|'sending'|'sent'|'review'|'failed';
+export type CommentEvent={id:number;commentId:string;attemptId:string|null;kind:string;summary:string;createdAt:string};
+export type CommentManualCheck={result:'found'|'not_found';note:string;createdAt:string};
+export type CommentReplyReceipt={remoteReplyId:string;accountRemoteId:string;remoteWorkId:string;remoteThreadId:string;remoteCommentId:string;recipientRemoteId:string;state:'sent';officialUrl:string;observedAt:string};
+export type CommentDetails={comment:CommentRecord;draft:CommentDraft;replyState:CommentReplyState;latestAttemptId:string|null;receipt:CommentReplyReceipt|null;events:CommentEvent[];manualCheck:CommentManualCheck|null};
+export type CommentReplyReview={id:string;commentId:string;accountId:string;sourceRevision:number;draftRevision:number;ownerRemoteId:string;remoteWorkId:string;remoteThreadId:string;remoteCommentId:string;authorRemoteId:string;authorName:string;sourceText:string;text:string;identity:Identity|null;contextId:string|null;capabilityVersion:string;createdAt:string;expiresAt:string;blockers:{code:string;message:string}[]};
+export type CommentListInput={accountId?:string;processed?:boolean;query?:string;offset:number;limit:number};
+export type CommentWorkspace={comments:CommentRecord[];total:number;sync:CommentSyncState[];capabilities:{accountId:string;read:boolean;reply:boolean;reason:string}[]};
+export type CommentSummary={total:number;unprocessed:number;accounts:{accountId:string;total:number;unprocessed:number}[]};
+export type CommentReplyCheckInput={commentId:string;attemptId:string;result:'found'|'not_found';note:string};

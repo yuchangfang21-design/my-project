@@ -1,13 +1,13 @@
 # 序幕 · 创作者工作台
 
-Windows 多账号运营工具，包含已确认的 HTML 界面演示和 **0.2.0 Electron 桌面基础版**。桌面版可持久保存账号、真实视频副本和本地任务，并管理独立的账号登录浏览器。真实身份解析、视频发布和消息接入仍待验证或开发。
+Windows 多账号运营工具，包含已确认的 HTML 界面演示和 **0.3.0 Electron 桌面版**。桌面版可持久保存账号、真实视频副本和本地任务，并管理独立的账号登录浏览器。新增发布文案、逐任务核对与中断恢复；真实身份解析、远端发布和消息接入仍待验证或开发。
 
-## 桌面基础版
+## 桌面版
 
 使用 Node.js 24，在项目目录运行：
 
 ```sh
-npm ci
+npm ci --ignore-scripts
 npm run desktop:prepare
 npm run desktop:dev
 ```
@@ -24,20 +24,27 @@ Linux 图形测试需要 Xvfb 或已有 DISPLAY，缺少默认 Xvfb 时可设置
 
 Windows 原生构建入口是仓库 Actions 的 **Build Windows desktop**。安装包实际生成并通过测试后，工作流提供 **Xumu-Windows-x64** 产物。构建未配置开发者签名，未运行的 Windows 验收不算通过；详见 [Windows 验收步骤](docs/windows-desktop-acceptance.md)。
 
-[打开 Windows 构建页面](https://github.com/yuchangfang21-design/my-project/actions/workflows/windows-build.yml) · [桌面实机运行截图](https://github.com/yuchangfang21-design/my-project/blob/preview/xumu-demo/artifacts/desktop-overview.png) · [本阶段交付与验证记录](docs/desktop-foundation-delivery.md)
+[打开 Windows 构建页面](https://github.com/yuchangfang21-design/my-project/actions/workflows/windows-build.yml) · [桌面实机运行截图](https://github.com/yuchangfang21-design/my-project/blob/preview/xumu-demo/artifacts/desktop-overview.png) · [本阶段交付与验证记录](docs/publishing-stage-a-delivery.md)
 
-最新云端结果：浏览器 10 项、实际 Electron 11 项、Linux 打包版 1 项测试全部通过；Windows 原生构建与安装结果仍需在对应平台确认。
+最新云端结果：浏览器 10 项、实际 Electron 31 项、Linux 打包版 2 项测试通过；Windows 原生构建与安装结果仍需在对应平台确认。
+
+本阶段已实现：独立发布文案与修订、完整核对清单、串行执行与提交前记录、不确定结果暂停及重启恢复。生产适配器保持禁用；核对页会显示“发布接入待验证”，不会上传或发布真实内容。
+
+- [实际发布工作台截图](artifacts/publishing-workspace.png)
+- [实际核对弹层截图](artifacts/publishing-review.png)
+- [窄窗口抽屉截图](artifacts/publishing-drawer.png)
+- [Windows 与真实发布验收](docs/windows-publishing-acceptance.md)
 
 ## 后续设计稿
 
-继续沿用当前界面，补齐发布前核对、结果待核对和统一消息工作台。这是静态设计评审稿，尚未启用真实发布或消息操作。
+继续沿用当前界面，补齐发布前核对、结果待核对和统一消息工作台。发布部分已按阶段 A 落地到桌面版，仍未启用真实发布；消息部分保留静态设计，尚未实现同步或发送。
 
 - [发布前核对效果图](artifacts/design-publishing-review.png)
 - [结果待核对效果图](artifacts/design-publishing-recovery.png)
 - [统一消息工作台效果图](artifacts/design-inbox-workbench.png)
 - [下载设计稿包](artifacts/xumu-next-stage-design.zip)：下载原始 ZIP 后解压，用 Edge 或 Chrome 打开 `index.html`，无需安装依赖。
 - [详细流程设计](docs/superpowers/specs/2026-10-17-publishing-and-inbox-experience-design.md)
-- [发布阶段 A 实施计划](docs/superpowers/plans/2026-10-17-publishing-stage-a.md)：数据库迁移、提交记录、确认与恢复、桌面接入和 Windows 实测，待评审后沿用直接开发方式执行。
+- [发布阶段 A 实施计划](docs/superpowers/plans/2026-10-17-publishing-stage-a.md)：数据库迁移、提交记录、确认与恢复、桌面接入和 Windows 实测，已按用户确认沿用直接开发方式执行，验证范围见本阶段交付记录。
 
 ## 直接查看效果
 

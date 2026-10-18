@@ -4,7 +4,7 @@ import type { CreateTasksInput, DesktopTask } from '../../shared/desktop-contrac
 import type { PublishDraftInput, PublishTaskDetails, PublicationReceipt, PublishReviewRow, PublishBatch, ManualCheckInput, RepostDraftInput } from '../../shared/publishing-contracts.js';
 import { id, record, text } from '../validation.js';
 
-export type AttemptRecord = { id:string; taskId:string; batchId:string; revision:number; targetRemoteId:string; contextId:string; phase:'reserved'|'preparing'|'submit_intent'|'finished'; outcome:'none'|'not_submitted'|'submitted'|'review'; receipt?:PublicationReceipt; createdAt:string };
+export type AttemptRecord = { id:string; taskId:string; batchId:string; revision:number; targetRemoteId:string; contextId:string; adapterVersion:string; snapshot:PublishReviewRow; phase:'reserved'|'preparing'|'submit_intent'|'finished'; outcome:'none'|'not_submitted'|'submitted'|'review'; receipt?:PublicationReceipt; createdAt:string };
 export class PublishStore {
   constructor(private db:Database.Database) {}
   listTasks(): DesktopTask[] { return (this.db.prepare('SELECT data,status FROM tasks ORDER BY rowid DESC').all() as any[]).map(row => ({...JSON.parse(row.data),status:row.status})); }
@@ -98,7 +98,7 @@ export class PublishStore {
       const batch:PublishBatch={id:randomUUID(),reviewId,taskIds:rows.map(r=>r.taskId),state:'running'};
       this.db.prepare('INSERT INTO publish_batches VALUES(?,?,?)').run(batch.id,reviewId,JSON.stringify(batch));
       for(const row of rows){
-        const attempt:AttemptRecord={id:randomUUID(),taskId:row.taskId,batchId:batch.id,revision:row.revision,targetRemoteId:row.identity!.remoteId,contextId:row.contextId!,phase:'reserved',outcome:'none',createdAt:new Date().toISOString()};
+        const attempt:AttemptRecord={id:randomUUID(),taskId:row.taskId,batchId:batch.id,revision:row.revision,targetRemoteId:row.identity!.remoteId,contextId:row.contextId!,adapterVersion:(row as PublishReviewRow & {adapterVersion?:string}).adapterVersion||'unverified',snapshot:structuredClone(row),phase:'reserved',outcome:'none',createdAt:new Date().toISOString()};
         this.db.prepare('INSERT INTO publish_attempts VALUES(?,?,?,?,?,?)').run(attempt.id,attempt.taskId,batch.id,attempt.phase,attempt.outcome,JSON.stringify(attempt));
         this.writeTask({...this.task(row.taskId),status:'pending'});this.event(row.taskId,'confirmed','已确认本次发布内容',attempt.id);
       }
@@ -110,7 +110,28 @@ export class PublishStore {
     if(!row)throw new Error('发布批次不存在');return JSON.parse(row.data);
   }
   private writeBatch(batch:PublishBatch):PublishBatch { this.db.prepare('UPDATE publish_batches SET data=? WHERE id=?').run(JSON.stringify(batch),batch.id);return batch; }
-  pauseBatch(batchId:string):PublishBatch { const batch=this.getBatch(batchId);return batch.state==='completed'?batch:this.writeBatch({...batch,state:'paused'}); }
+  findBatchForReview(reviewId:string):PublishBatch|null{
+    const row=this.db.prepare('SELECT data FROM publish_batches WHERE review_id=?').get(id(reviewId)) as any;
+    return row?JSON.parse(row.data):null;
+  }
+  pauseBatch(batchId:string):PublishBatch {
+    return this.db.transaction(()=>{
+      const batch=this.getBatch(batchId);if(batch.state==='completed')return batch;
+      for(const taskId of batch.taskIds){
+        const attempt=this.getAttempt(taskId);
+        if(attempt?.batchId===batch.id&&attempt.phase==='reserved'){
+          this.writeAttempt({...attempt,phase:'finished',outcome:'not_submitted'});
+          this.event(taskId,'batch_paused','批次暂停：未开始的任务等待重新核对',attempt.id);
+        }
+      }
+      return this.writeBatch({...batch,state:'paused'});
+    })();
+  }
+  completeBatch(batchId:string):PublishBatch{
+    const batch=this.getBatch(batchId);
+    if(batch.taskIds.some(taskId=>!['submitted','published','rejected','cancelled'].includes(this.task(taskId).status)))throw new Error('批次仍有未完成任务');
+    return this.writeBatch({...batch,state:'completed'});
+  }
   beginPreparation(attemptId:string):void {
     this.db.transaction(()=>{
       const attempt=this.attempt(attemptId),task=this.task(attempt.taskId);
@@ -132,7 +153,7 @@ export class PublishStore {
       if(outcome.kind==='review' ? attempt.phase!=='submit_intent' : attempt.phase==='submit_intent')throw new Error('提交阶段不能按未提交处理');
       const task=this.task(attempt.taskId);
       this.writeAttempt({...attempt,phase:'finished',outcome:outcome.kind});
-      this.writeTask({...task,status:outcome.kind==='review'?'review':'failed'});
+      this.writeTask({...task,status:outcome.kind==='review'?'review':outcome.errorCode==='LOGIN_REQUIRED'?'waiting_login':outcome.errorCode==='APP_CLOSING'?'pending':'failed'});
       this.event(task.id,outcome.kind,outcome.kind==='review'?'提交结果不明确，请先核对官方记录':'本次未提交，请检查条件后重新核对',attempt.id);
     })();
   }

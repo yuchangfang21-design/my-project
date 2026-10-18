@@ -23,3 +23,15 @@ function createFixture(dir,count=3){
  return{repo,store:repo.publishing,asset,accounts,tasks,row,receipt,contexts,randomUUID};
 }
 module.exports.createFixture=createFixture;
+async function createServiceFixture(dir,options={}){
+ const f=createFixture(dir,options.count||2);const{MediaLibrary}=require(p.join(process.cwd(),'dist-desktop/desktop/media/library.js'));const{OperationCoordinator}=require(p.join(process.cwd(),'dist-desktop/desktop/publishing/coordinator.js'));const{UnverifiedPublishAdapter}=require(p.join(process.cwd(),'dist-desktop/desktop/publishing/adapter.js'));const{PublishingService}=require(p.join(process.cwd(),'dist-desktop/desktop/publishing/service.js'));
+ const media=new MediaLibrary(dir,f.repo);await media.initialize();const coordinator=new OperationCoordinator();let clock=Date.now();
+ const state={prepareCalls:[],submitCalls:[],readCalls:[],closed:[],missing:new Set(),identity:new Map(),capability:new Map(),prepareHook:null,submitHook:null,readState:null,onClose:null};
+ const pages=new Map(f.accounts.map(a=>[a.id,{accountId:a.id,goto:async()=>undefined}]));
+ const sessions={withAccountPage:async(accountId,action)=>{if(state.missing.has(accountId))throw new Error('未打开账号登录窗口');return action(pages.get(accountId),f.contexts.get(accountId));},close:async(accountId)=>{state.missing.add(accountId);state.closed.push(accountId);if(state.onClose)state.onClose(accountId);}};
+ const adapter={worksUrl:'https://creator.douyin.com/fixture/works',observe:async(page)=>({identity:{remoteId:state.identity.get(page.accountId)||'fixture-'+page.accountId,displayName:'夹具身份',observedAt:new Date(clock).toISOString()},canPublish:state.capability.get(page.accountId)!==false,version:'fixture-v1'}),prepare:async(page,input,signal)=>{state.prepareCalls.push(page.accountId);if(state.prepareHook)await state.prepareHook(page,input,signal);},submit:async(page)=>{state.submitCalls.push(page.accountId);const task=f.tasks.find(t=>t.accountId===page.accountId);if(state.submitHook)return state.submitHook(page,task);return f.receipt(task);},readResult:async(_page,attempt)=>{state.readCalls.push(attempt.id);return state.readState?f.receipt(f.store.task(attempt.taskId),state.readState):null;}};
+ const service=new PublishingService(f.store,f.repo,media,sessions,coordinator,options.unverified?new UnverifiedPublishAdapter():adapter,()=>clock,options.timeouts);
+ return{...f,media,coordinator,sessions,adapter,state,service,advance(ms){clock+=ms;},async close(){await service.close();await coordinator.close();await media.close();f.repo.close();}};
+}
+async function settleBatch(f,batchId){for(let i=0;i<1000;i++){const batch=f.service.getPublishingBatch(batchId);if(batch.state!=='running')return batch;await new Promise(r=>setTimeout(r,5));}throw new Error('批次没有结束或暂停');}
+module.exports.createServiceFixture=createServiceFixture;module.exports.settleBatch=settleBatch;

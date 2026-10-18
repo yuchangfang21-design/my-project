@@ -90,3 +90,7 @@ CI结果证明Windows构建、原生数据库及打包程序自动化启动/迁�
 ## 后续0.4.2接入检查版
 
 用户已安装0.4.1并反馈扫码完成；软件身份解析仍未实现，因此保持待确认。已新增本机只读检查入口以取得后续联调依据。[0.4.2完整Windows构建39129469306](https://github.com/yuchangfang21-design/my-project/actions/runs/39129469306)成功，桌面81项、打包程序3项全部通过，无失败或跳过，并提供 `Xumu-Windows-x64` 实际安装包。先前两项迁移备份权限跳过已由[原生ACL验证](windows-permissions-followup.md)补齐；这不代表所有Windows用户目录权限均已人工验收。真实身份、发布及评论仍未接通，具体范围、下载与校验见[官方接入跟进](official-site-integration-followup.md)。
+
+## 后续0.4.3账号核验候选版
+
+[完整Windows构建39135618277](https://github.com/yuchangfang21-design/my-project/actions/runs/39135618277)在 `db05ca1aa238a409d5937acd5fa75d181585b54b` 成功，桌面91项及打包程序3项全部通过，0失败或跳过，119MB的 `Xumu-Windows-x64` 产物已生成。此版据用户报告的实际账号信息接口增加只读候选解析，并修复等待草稿保存期间的组合筛选和分页竞态。实际接口响应仍待用户设备确认，真实发布、评论与私信仍未接通；下载、校验和失败构建记录见[账号核验说明](account-identity-reader.md)。

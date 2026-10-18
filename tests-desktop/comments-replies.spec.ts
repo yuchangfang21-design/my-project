@@ -1,19 +1,17 @@
 import{test,expect}from'@playwright/test';import{mkdtemp,rm}from'node:fs/promises';import{tmpdir}from'node:os';import{join}from'node:path';import{launchDesktop}from'./helpers';
-test('comments replies bind exact source and draft revisions before any write',async()=>{
+for(const scenario of['expired','draft','source','removed','unsupported','author'])test(`comments replies bind exact source and draft revisions before any write (${scenario})`,async()=>{
  const dir=await mkdtemp(join(tmpdir(),'xumu-comments-reply-binding-')),app=await launchDesktop(dir);
- try{const results=await app.evaluate(async(_e,root)=>{
-  const require=process.getBuiltinModule('module')!.createRequire(process.cwd()+'/package.json'),p=require('node:path');const{createCommentServiceFixture}=require(p.join(process.cwd(),'tests-desktop/comments-fixtures.cjs'));const results=[];
-  for(const scenario of['expired','draft','source','removed','unsupported','author']){
+ try{const result=await app.evaluate(async(_e,{root,scenario})=>{
+  const require=process.getBuiltinModule('module')!.createRequire(process.cwd()+'/package.json'),p=require('node:path');const{createCommentServiceFixture}=require(p.join(process.cwd(),'tests-desktop/comments-fixtures.cjs'));
    const f=await createCommentServiceFixture(p.join(root,scenario),{count:1});
    try{f.ingest();const comment=f.comments.list({offset:0,limit:100}).comments[0];f.comments.saveDraft({commentId:comment.id,expectedRevision:0,text:'  完整回复\n不改换行  '});const review=await f.service.reviewCommentReply({commentId:comment.id});
     if(scenario==='expired')f.advance(300001);if(scenario==='draft')f.comments.saveDraft({commentId:comment.id,expectedRevision:1,text:'改过的回复'});
     if(scenario==='source')f.ingest(f.accounts[0],[f.observed(f.accounts[0],{text:'改过的源文'})]);if(scenario==='removed'||scenario==='unsupported')f.ingest(f.accounts[0],[f.observed(f.accounts[0],{availability:scenario,text:''})]);
     if(scenario==='author')await f.pages.get(f.accounts[0].id).locator('article').evaluate((el:any)=>el.setAttribute('data-author','another-stable-author'));
     try{await f.service.sendCommentReply({reviewId:review.id});}catch{}
-    results.push({scenario,submits:f.state.submitCalls,prepares:f.state.prepareCalls,text:review.text,source:review.sourceText,author:review.authorRemoteId});
+    return{scenario,submits:f.state.submitCalls,prepares:f.state.prepareCalls,text:review.text,source:review.sourceText,author:review.authorRemoteId};
    }finally{await f.close();}
-  }return results;
- },dir);expect(results).toEqual(['expired','draft','source','removed','unsupported','author'].map(scenario=>({scenario,submits:0,prepares:0,text:'  完整回复\n不改换行  ',source:'本地夹具评论',author:'author-1'})));}
+ },{root:dir,scenario});expect(result).toEqual({scenario,submits:0,prepares:0,text:'  完整回复\n不改换行  ',source:'本地夹具评论',author:'author-1'});}
  finally{await app.close();await rm(dir,{recursive:true,force:true});}
 });
 test('comments replies recheck the combined live target after delayed preparation',async()=>{

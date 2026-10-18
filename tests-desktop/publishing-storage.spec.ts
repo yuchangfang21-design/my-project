@@ -19,6 +19,17 @@ test('publishing storage rolls back invalid foreign references and restores fore
  try{const r=await app.evaluate(async(_e,root)=>{const require=process.getBuiltinModule('module')!.createRequire(process.cwd()+'/package.json');const p=require('node:path');const{seedV1}=require(p.join(process.cwd(),'tests-desktop/publishing-fixtures.cjs'));const{migrateDatabase}=require(p.join(process.cwd(),'dist-desktop/desktop/storage/migrations.js'));const f=seedV1(p.join(root,'invalid'),{invalidReference:true});f.db.pragma('foreign_keys=ON');let rejected=false;try{migrateDatabase(f.db,p.join(root,'invalid'));}catch{rejected=true;}const result={rejected,version:f.db.pragma('user_version',{simple:true}),keys:f.db.pragma('foreign_keys',{simple:true}),rows:f.db.prepare('SELECT COUNT(*) AS n FROM tasks').get().n};f.db.close();return result;},dir);expect(r).toEqual({rejected:true,version:1,keys:1,rows:2});}finally{await app.close();await rm(dir,{recursive:true,force:true});}
 });
 test('publishing storage refuses migration when the backup cannot be written',async()=>{
- const dir=await mkdtemp(join(tmpdir(),'xumu-pub-backup-'));const app=await launchDesktop(dir);
- try{const r=await app.evaluate(async(_e,root)=>{const require=process.getBuiltinModule('module')!.createRequire(process.cwd()+'/package.json');const p=require('node:path'),fs=require('node:fs');const{seedV1}=require(p.join(process.cwd(),'tests-desktop/publishing-fixtures.cjs'));const{migrateDatabase}=require(p.join(process.cwd(),'dist-desktop/desktop/storage/migrations.js'));const target=p.join(root,'readonly');const f=seedV1(target);fs.chmodSync(target,0o500);let rejected=false;try{migrateDatabase(f.db,target);}catch{rejected=true;}finally{fs.chmodSync(target,0o700);}const result={rejected,version:f.db.pragma('user_version',{simple:true}),rows:f.db.prepare('SELECT COUNT(*) AS n FROM tasks').get().n};f.db.close();return result;},dir);expect(r).toEqual({rejected:true,version:1,rows:2});}finally{await app.close();await rm(dir,{recursive:true,force:true});}
+ const dir=await mkdtemp(join(tmpdir(),'xumu-pub-backup-')),app=await launchDesktop(dir);
+ try{const result=await app.evaluate(async(_e,root)=>{
+  const require=process.getBuiltinModule('module')!.createRequire(process.cwd()+'/package.json'),p=require('node:path'),fs=require('node:fs');
+  const{seedV1}=require(p.join(process.cwd(),'tests-desktop/publishing-fixtures.cjs')),{withBackupWritesDenied,databaseSnapshot}=require(p.join(process.cwd(),'tests-desktop/backup-permissions.cjs'));
+  const{migrateDatabase}=require(p.join(process.cwd(),'dist-desktop/desktop/storage/migrations.js'));const target=p.join(root,'readonly'),old=seedV1(target);old.db.pragma('foreign_keys=ON');
+  try{
+   const before=databaseSnapshot(old.db);
+   const denied=withBackupWritesDenied(root,target,()=>{let code='';try{migrateDatabase(old.db,target);}catch(error){code=(error as NodeJS.ErrnoException).code||'';}return{code,after:databaseSnapshot(old.db),backups:fs.readdirSync(target).filter((name:string)=>name.startsWith('workspace-backup-'))};});
+   migrateDatabase(old.db,target);const recovered=databaseSnapshot(old.db);
+   return{before,denied,recoveredVersion:recovered.version,restoredKeys:recovered.keys,rows:old.db.prepare('SELECT COUNT(*) AS n FROM tasks').get().n,backups:fs.readdirSync(target).filter((name:string)=>name.startsWith('workspace-backup-')).length};
+  }finally{old.db.close();}
+ },dir);expect(['EACCES','EPERM']).toContain(result.denied.code);expect(result.denied.after).toEqual(result.before);expect(result.before.version).toBe(1);expect(result.denied.backups).toEqual([]);expect(result).toMatchObject({recoveredVersion:3,restoredKeys:1,rows:2,backups:1});}
+ finally{await app.close();await rm(dir,{recursive:true,force:true});}
 });

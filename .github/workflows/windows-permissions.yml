@@ -21,10 +21,10 @@ jobs:
         id: permission_tests
         run: npm run test:desktop -- --grep 'backup cannot' --reporter=list,json
         env:
-          PLAYWRIGHT_JSON_OUTPUT_FILE: desktop-test-results/permission-results.json
+          PLAYWRIGHT_JSON_OUTPUT_FILE: permission-test-results/results.json
       - name: Summarize permission checks
         if: always()
-        run: node scripts/summarize-desktop-results.mjs desktop-test-results/permission-results.json
+        run: node scripts/summarize-desktop-results.mjs permission-test-results/results.json
       - name: Run full desktop regression
         run: npm run test:desktop -- --reporter=list,json
         env:
@@ -36,5 +36,7 @@ jobs:
         if: always()
         with:
           name: Windows-permission-test-results
-          path: desktop-test-results
+          path: |
+            desktop-test-results
+            permission-test-results
           if-no-files-found: error

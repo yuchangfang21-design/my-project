@@ -1,3 +1,6 @@
+import { CommentsService } from './comments/service.js';
+import { UnverifiedCommentsAdapter } from './comments/adapter.js';
+import { CommentDraftCloseGuard } from './comments/draft-close.js';
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import { join, isAbsolute } from 'node:path';
 import { mkdirSync } from 'node:fs';
@@ -13,6 +16,9 @@ let sessions: SessionManager;
 let media: MediaLibrary;
 let publishing:PublishingService;
 let coordinator:OperationCoordinator;
+let comments:CommentsService;
+let guard:CommentDraftCloseGuard|undefined;
+let requestingQuit=false;
 let quitting = false;
 let quitReady=false;
 
@@ -40,14 +46,19 @@ if (primaryInstance) app.whenReady().then(async () => {
     if (event.senderFrame !== event.sender.mainFrame || !BrowserWindow.fromWebContents(event.sender)) throw new Error('不允许的调用来源');
     return { mode: 'desktop', version: app.getVersion() };
   });
-  registerIpc(createDesktopWindow(), repository, media, sessions,publishing,coordinator);
-  app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) registerIpc(createDesktopWindow(), repository, media, sessions,publishing,coordinator); });
+  comments=new CommentsService(repository.comments,repository,sessions,coordinator,new UnverifiedCommentsAdapter());
+  const connectWindow=()=>{const win=createDesktopWindow();guard=new CommentDraftCloseGuard(win);registerIpc(win,repository,media,sessions,publishing,coordinator,comments,guard);};
+  connectWindow();
+  app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) connectWindow(); });
 }).catch(error => { if (!quitting) { dialog.showErrorBox('序幕启动失败', String(error.message || error)); app.exit(1); } });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('before-quit',event=>{
-  if(quitReady)return;event.preventDefault();if(quitting)return;quitting=true;
+  if(quitReady)return;event.preventDefault();if(quitting||requestingQuit)return;requestingQuit=true;
   void (async()=>{
-    for(const cleanup of[()=>publishing?.close(),()=>coordinator?.close(),()=>sessions?.closeAll(),()=>media?.close()])await Promise.resolve().then(cleanup).catch(()=>undefined);
+    if(guard&&!await guard.request()){requestingQuit=false;return;}
+    quitting=true;
+    await Promise.allSettled([publishing?.close(),comments?.close()]);
+    for(const cleanup of[()=>coordinator?.close(),()=>sessions?.closeAll(),()=>media?.close()])await Promise.resolve().then(cleanup).catch(()=>undefined);
     repository?.close();quitReady=true;app.quit();
   })();
 });

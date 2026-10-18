@@ -9,6 +9,21 @@ export interface DesktopAsset { id: string; title: string; filename: string; pos
 export interface DesktopTask { id: string; accountId: string; assetId: string; title: string; status: import('./publishing-contracts.js').PublishStatus; time: string; revision: number; description: string; tags: string[]; assetSha256: string; receipt?: import('./publishing-contracts.js').PublicationReceipt; repostOf?: string }
 export interface WorkspaceSnapshot { version: 1; accounts: DesktopAccount[]; assets: DesktopAsset[]; tasks: DesktopTask[]; messages: [] }
 export interface DesktopApi {
+  getCommentWorkspace(input:import('./comments-contracts.js').CommentListInput):Promise<import('./comments-contracts.js').CommentWorkspace>;
+  getCommentSummary():Promise<import('./comments-contracts.js').CommentSummary>;
+  getCommentDetails(commentId:string):Promise<import('./comments-contracts.js').CommentDetails>;
+  saveCommentDraft(input:import('./comments-contracts.js').CommentDraftInput):Promise<import('./comments-contracts.js').CommentDraft>;
+  markCommentProcessed(input:{commentId:string;processed:boolean}):Promise<import('./comments-contracts.js').CommentRecord>;
+  syncComments(input:{accountId:string}):Promise<import('./comments-contracts.js').CommentSyncState>;
+  reviewCommentReply(input:{commentId:string}):Promise<import('./comments-contracts.js').CommentReplyReview>;
+  sendCommentReply(input:{reviewId:string}):Promise<import('./comments-contracts.js').CommentDetails>;
+  recheckCommentReply(commentId:string):Promise<import('./comments-contracts.js').CommentDetails>;
+  recordCommentReplyCheck(input:import('./comments-contracts.js').CommentReplyCheckInput):Promise<import('./comments-contracts.js').CommentDetails>;
+  openCommentPage(commentId:string):Promise<void>;
+  registerCommentDraftFlush():Promise<void>;
+  onCommentDraftFlush(listener:(requestId:string)=>void):()=>void;
+  completeCommentDraftFlush(input:{requestId:string;ok:boolean}):Promise<void>;
+  onCommentDraftCloseCanceled(listener:(event:{requestId:string;reason:string})=>void):()=>void;
   getRuntime(): Promise<{ mode: 'desktop'; version: string }>;
   getSnapshot(): Promise<WorkspaceSnapshot>;
   createAccount(input: CreateAccountInput): Promise<DesktopAccount>;

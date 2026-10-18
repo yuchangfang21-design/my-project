@@ -1,10 +1,12 @@
+import type { CommentsService } from './comments/service.js';
+import type { CommentDraftCloseGuard } from './comments/draft-close.js';
 import { BrowserWindow, ipcMain, dialog, type IpcMainInvokeEvent } from 'electron';
 import type { Repository } from './storage/repository.js';
 import type { MediaLibrary } from './media/library.js';
 import type { SessionManager } from './browser/session-manager.js';
 import type { PublishingService } from './publishing/service.js';
 import type { OperationCoordinator } from './publishing/coordinator.js';
-export function registerIpc(window: BrowserWindow, repository: Repository, media: MediaLibrary, sessions: SessionManager, publishing:PublishingService,coordinator:OperationCoordinator): void {
+export function registerIpc(window: BrowserWindow, repository: Repository, media: MediaLibrary, sessions: SessionManager, publishing:PublishingService,coordinator:OperationCoordinator,comments:CommentsService,guard:CommentDraftCloseGuard): void {
   const handle = (channel: string, action: (...args: any[]) => unknown) => {
     ipcMain.removeHandler(channel);
     ipcMain.handle(channel, (event: IpcMainInvokeEvent, ...args: any[]) => {
@@ -12,6 +14,19 @@ export function registerIpc(window: BrowserWindow, repository: Repository, media
       return action(...args);
     });
   };
+  handle('xumu:comments-workspace', input => comments.getCommentWorkspace(input));
+  handle('xumu:comments-summary', () => comments.getCommentSummary());
+  handle('xumu:comments-details', input => comments.getCommentDetails(input));
+  handle('xumu:comments-save-draft', input => comments.saveCommentDraft(input));
+  handle('xumu:comments-processed', input => comments.markCommentProcessed(input));
+  handle('xumu:comments-sync', input => comments.syncComments(input));
+  handle('xumu:comments-review', input => comments.reviewCommentReply(input));
+  handle('xumu:comments-send', input => comments.sendCommentReply(input));
+  handle('xumu:comments-recheck', input => comments.recheckCommentReply(input));
+  handle('xumu:comments-manual-check', input => comments.recordCommentReplyCheck(input));
+  handle('xumu:comments-open-page', input => comments.openCommentPage(input));
+  handle('xumu:comment-draft-register',()=>guard.register());
+  handle('xumu:comment-draft-complete',input=>guard.complete(input));
   handle('xumu:snapshot', () => repository.snapshot());
   handle('xumu:create-account', input => repository.createAccount(input));
   handle('xumu:create-tasks', async input => { await media.checkAsset(input?.assetId); return repository.createTasks(input); });

@@ -1,6 +1,21 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DesktopApi } from '../shared/desktop-contracts.js';
 const api: DesktopApi = {
+  getCommentWorkspace: input => ipcRenderer.invoke('xumu:comments-workspace', input),
+  getCommentSummary: () => ipcRenderer.invoke('xumu:comments-summary'),
+  getCommentDetails: input => ipcRenderer.invoke('xumu:comments-details', input),
+  saveCommentDraft: input => ipcRenderer.invoke('xumu:comments-save-draft', input),
+  markCommentProcessed: input => ipcRenderer.invoke('xumu:comments-processed', input),
+  syncComments: input => ipcRenderer.invoke('xumu:comments-sync', input),
+  reviewCommentReply: input => ipcRenderer.invoke('xumu:comments-review', input),
+  sendCommentReply: input => ipcRenderer.invoke('xumu:comments-send', input),
+  recheckCommentReply: input => ipcRenderer.invoke('xumu:comments-recheck', input),
+  recordCommentReplyCheck: input => ipcRenderer.invoke('xumu:comments-manual-check', input),
+  openCommentPage: input => ipcRenderer.invoke('xumu:comments-open-page', input),
+  registerCommentDraftFlush:()=>ipcRenderer.invoke('xumu:comment-draft-register'),
+  completeCommentDraftFlush:input=>ipcRenderer.invoke('xumu:comment-draft-complete',input),
+  onCommentDraftFlush:listener=>{const handler=(_event:Electron.IpcRendererEvent,id:string)=>listener(id);ipcRenderer.on('xumu:comment-draft-flush',handler);return()=>{ipcRenderer.removeListener('xumu:comment-draft-flush',handler);};},
+  onCommentDraftCloseCanceled:listener=>{const handler=(_event:Electron.IpcRendererEvent,value:{requestId:string;reason:string})=>listener(value);ipcRenderer.on('xumu:comment-draft-close-canceled',handler);return()=>{ipcRenderer.removeListener('xumu:comment-draft-close-canceled',handler);};},
   getRuntime: () => ipcRenderer.invoke('xumu:runtime'),
   getSnapshot: () => ipcRenderer.invoke('xumu:snapshot'),
   createAccount: input => ipcRenderer.invoke('xumu:create-account', input),

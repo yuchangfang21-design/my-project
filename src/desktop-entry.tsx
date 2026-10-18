@@ -1,5 +1,12 @@
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import App from './App';
+import { CommentDraftController } from './comments/CommentDraftController';
 if(!window.xumu)throw new Error('无法加载桌面连接，请重新安装或启动应用。');
-createRoot(document.getElementById('root')!).render(<App desktopApi={window.xumu} />);
+const api=window.xumu;
+const drafts=new CommentDraftController(api);
+let closingRequest:string|null=null;
+api.onCommentDraftFlush(requestId=>{closingRequest=requestId;drafts.setClosing(true);void drafts.flushAll().then(()=>api.completeCommentDraftFlush({requestId,ok:true})).catch(async()=>{drafts.setClosing(false);try{await api.completeCommentDraftFlush({requestId,ok:false});}catch{/* Expired tokens cannot close the window. */}});});
+api.onCommentDraftCloseCanceled(({requestId,reason})=>{if(closingRequest===requestId){drafts.setClosing(false);window.dispatchEvent(new CustomEvent('xumu-draft-close-error',{detail:reason}));}});
+void api.registerCommentDraftFlush();
+createRoot(document.getElementById('root')!).render(<App desktopApi={api} commentDrafts={drafts} />);

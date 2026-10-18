@@ -104,6 +104,13 @@ export class CommentStore{
  replyForReview(reviewId:string):CommentReplyAttempt|null{
   const row=this.db.prepare('SELECT id FROM comment_reply_attempts WHERE review_id=?').get(id(reviewId)) as {id:string}|undefined;return row?this.replyAttempt(row.id):null;
  }
+ // A monotonic local history identity; timestamps can tie within one millisecond.
+ replyHistoryToken(commentId:string):string{
+  const attempt=this.getReplyAttempt(commentId);
+  if(!attempt)return 'none';
+  const check=this.db.prepare('SELECT id FROM comment_reply_checks WHERE comment_id=? AND attempt_id=? ORDER BY id DESC LIMIT 1').get(commentId,attempt.id) as {id:number}|undefined;
+  return attempt.id+':'+(check?.id??0);
+ }
  private writeReply(value:CommentReplyAttempt):void{this.db.prepare('UPDATE comment_reply_attempts SET data=?,phase=?,outcome=? WHERE id=?').run(JSON.stringify(value),value.phase,value.outcome,value.id);}
  assertReplySnapshot(review:CommentReplyReview):void{
   const{comment,draft}=this.details(review.commentId);

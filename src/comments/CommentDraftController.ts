@@ -18,7 +18,7 @@ export class CommentDraftController {
  async flush(){clearTimeout(this.timer);if(this.active)await this.flushEntry(this.active);}
  private async flushEntry(id:string){const e=this.entries.get(id)!;if(e.pending)await e.pending;while(e.text!==e.savedText)await this.save(id);}
  async flushAll(){clearTimeout(this.timer);for(const id of this.entries.keys())await this.flushEntry(id);}
- async load(id:string){const ticket=++this.ticket;await this.flush();if(ticket!==this.ticket)return;const details=await this.api.getCommentDetails(id);if(ticket!==this.ticket)return;await this.flush();if(ticket!==this.ticket)return;this.entries.set(id,this.entry(details.draft));this.active=id;this.publish();}
+ async load(id:string){const ticket=++this.ticket;await this.flush();if(ticket!==this.ticket)return;const details=await this.api.getCommentDetails(id);if(ticket!==this.ticket)return;await this.flush();if(ticket!==this.ticket)return;const current=this.entries.get(id);if(!current||details.draft.revision>=current.revision)this.entries.set(id,this.entry(details.draft));this.active=id;this.publish();}
  async reload(){if(!this.active)return;const id=this.active,ticket=++this.ticket,e=this.entries.get(id)!;await e.pending?.catch(()=>undefined);const details=await this.api.getCommentDetails(id);if(ticket!==this.ticket)return;this.entries.set(id,this.entry(details.draft));this.publish();}
  dispose(){clearTimeout(this.timer);this.listeners.clear();this.ticket++;}
 }

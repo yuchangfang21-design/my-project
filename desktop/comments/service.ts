@@ -14,6 +14,7 @@ class CommentsBlocked extends Error{constructor(readonly code:string,message:str
 export class CommentsService{
  private closing=false;
  private reviews=new Map<string,CommentReplyReview>();
+ private reviewHistory=new Map<string,string>();
  private sends=new Map<string,Promise<CommentDetails>>();
  private replyControllers=new Map<string,{commentId:string;controller:AbortController}>();
  private jobs=new Set<Promise<unknown>>();
@@ -115,15 +116,15 @@ export class CommentsService{
  async reviewCommentReply(input:{commentId:string}):Promise<CommentReplyReview>{
   this.requireOpen();const r=record(input,['commentId']),commentId=id(r.commentId);this.store.details(commentId);
   return this.track(this.coordinator.run(async()=>{
-   this.requireOpen();const review=this.replyBase(commentId),details=this.store.details(commentId);
+   this.requireOpen();const review=this.replyBase(commentId),details=this.store.details(commentId),history=this.store.replyHistoryToken(commentId);
    if(!review.text.trim())review.blockers.push({code:'EMPTY_DRAFT',message:'请先保存完整回复草稿'});
    if(details.comment.availability!=='present')review.blockers.push({code:'SOURCE_UNAVAILABLE',message:'源评论已删除或当前类型不支持回复'});
    if(details.replyState==='sending'||details.replyState==='sent'||(details.replyState==='review'&&details.manualCheck?.result!=='not_found'))review.blockers.push({code:'REPLY_HISTORY',message:'已有发送或待核对记录，不能直接再次发送'});
    try{await this.sessions.withAccountPage(review.accountId,(page,contextId)=>this.checkReplyTarget(review,page,contextId,true));}
    catch(error){review.blockers.push({code:error instanceof CommentsBlocked?error.code:'CAPABILITY_UNVERIFIED',message:error instanceof CommentsBlocked?error.message:'评论回复接入待验证，请先核实账号与官方评论页面'});}
    this.requireOpen();const now=this.now();review.createdAt=new Date(now).toISOString();review.expiresAt=new Date(now+300000).toISOString();
-   for(const[key,old]of this.reviews)if(Date.parse(old.expiresAt)<=now)this.reviews.delete(key);
-   this.reviews.set(review.id,structuredClone(review));return structuredClone(review);
+   for(const[key,old]of this.reviews)if(Date.parse(old.expiresAt)<=now){this.reviews.delete(key);this.reviewHistory.delete(key);}
+   this.reviews.set(review.id,structuredClone(review));this.reviewHistory.set(review.id,history);return structuredClone(review);
   }));
  }
  async sendCommentReply(input:{reviewId:string}):Promise<CommentDetails>{
@@ -134,13 +135,17 @@ export class CommentsService{
    this.requireOpen();const review=this.reviews.get(reviewId);
    if(!review||Date.parse(review.expiresAt)<=this.now())throw new Error('回复核对已过期，请重新核对');
    if(review.blockers.length)throw new Error('此条回复仍有阻塞原因，请先处理');this.store.assertReplySnapshot(review);
+   const assertHistory=()=>{if(this.reviewHistory.get(review.id)!==this.store.replyHistoryToken(review.commentId))throw new Error('回复记录已变化，请重新核对');};assertHistory();
    return this.sessions.withAccountPage(review.accountId,async(page,contextId)=>{
     await this.checkReplyTarget(review,page,contextId);this.requireOpen();
     if(Date.parse(review.expiresAt)<=this.now())throw new Error('回复核对已过期，请重新核对');
+    assertHistory();
     const attempt=this.store.reserveReply(review),controller=new AbortController();this.replyControllers.set(attempt.id,{commentId:attempt.commentId,controller});
     try{
      await this.bounded(review.accountId,this.budgets.prepareMs,()=>this.adapter.prepareReply(page,review,controller.signal));
-     await this.checkReplyTarget(review,page,contextId);this.requireOpen();this.store.beginReplySubmit(attempt.id);
+     await this.checkReplyTarget(review,page,contextId);this.requireOpen();
+     if(Date.parse(review.expiresAt)<=this.now())throw new Error('回复核对已过期，请重新核对');
+     this.store.beginReplySubmit(attempt.id);
      const receipt=await this.bounded(review.accountId,this.budgets.submitMs,()=>this.adapter.submitReply(page,review),()=>this.store.finishReply(attempt.id,{kind:'review'}));
      if(!receipt)throw new CommentsBlocked('RESULT_UNKNOWN','未取得唯一回复回执');this.store.recordReplyReceipt(attempt.id,receipt);
     }catch{const current=this.store.getReplyAttempt(attempt.commentId);if(current?.id===attempt.id&&current.phase!=='finished')this.store.finishReply(attempt.id,{kind:current.phase==='submit_intent'?'review':'not_sent'});}

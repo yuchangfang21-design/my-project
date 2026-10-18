@@ -48,3 +48,8 @@ test('comments UI retains last good records and dirty input after failed sync re
 });
 
 async function closeDesktop(app:ElectronApplication){try{await app.evaluate(({ipcMain})=>{const g=globalThis as any;if(g.savedHandler){ipcMain.removeHandler('xumu:comments-save-draft');ipcMain.handle('xumu:comments-save-draft',g.savedHandler);}});}catch{/* Already closed. */}await app.close();}
+test('comments review regression preserves combined filters when switching back to all accounts',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'xumu-comments-all-filters-')),app=await launchDesktop(dir);
+ try{const seeded=await seedComments(app),p=await openComments(app);await p.evaluate(id=>window.xumu!.markCommentProcessed({commentId:id,processed:true}),seeded.comments[0].id);await p.getByRole('button',{name:'刷新本地评论'}).click();await p.getByLabel('本地处理状态').selectOption('processed');await p.getByLabel('搜索评论').fill('同名');await expect(p.getByTestId('comment-row')).toHaveCount(1);await p.getByRole('button',{name:'账号：'+seeded.accounts.find(a=>a.id===seeded.comments[0].accountId)!.name,exact:true}).click();await expect(p.getByTestId('comment-row')).toHaveCount(1);await p.getByRole('button',{name:'全部账号',exact:true}).click();await expect(p.getByLabel('本地处理状态')).toHaveValue('processed');await expect(p.getByLabel('搜索评论')).toHaveValue('同名');await expect(p.getByTestId('comment-row')).toHaveCount(1);
+ }finally{await closeDesktop(app);await rm(dir,{recursive:true,force:true});}
+});

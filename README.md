@@ -28,7 +28,7 @@ Windows 原生构建入口是仓库 Actions 的 **Build Windows desktop**。安�
 
 [打开 Windows 构建页面](https://github.com/yuchangfang21-design/my-project/actions/workflows/windows-build.yml) · [桌面实机运行截图](https://github.com/yuchangfang21-design/my-project/blob/preview/xumu-demo/artifacts/desktop-overview.png) · [评论阶段 B 交付与验证记录](docs/comments-stage-b-delivery.md) · [Windows 评论验收](docs/windows-comments-acceptance.md)
 
-0.4.0最终云端验收：实际Linux Electron74项、浏览器10项、实际Linux打包3项全部通过；完整边界、一次独立审阅、4项修复与1项延期改进见[阶段 B 交付记录](docs/comments-stage-b-delivery.md)。Windows原生构建与安装结果仍需在对应平台确认。
+0.4.0最终云端验收：实际Linux Electron74项、浏览器10项、实际Linux打包3项全部通过；完整边界、一次独立审阅及4项修复见[阶段 B 交付记录](docs/comments-stage-b-delivery.md)。Windows原生构建与安装结果仍需在对应平台确认。
 
 已实现独立发布文案与修订、完整核对清单、共享串行队列、提交前记录、不确定结果及重启恢复；评论新增账号筛选、来源归属、数据库草稿、离开/退出保护、逐条回复确认与只读结果核对。生产发布和评论适配器保持禁用，不会上传、发布或发送真实内容。
 

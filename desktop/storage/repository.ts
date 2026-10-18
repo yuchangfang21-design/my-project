@@ -31,6 +31,7 @@ export class Repository {
       this.db.pragma('foreign_keys=ON');
       migrateDatabase(this.db,this.dataDir);
       this.publishing = new PublishStore(this.db);
+      this.publishing.recoverInterrupted();
       this.db.prepare('SELECT id FROM accounts LIMIT 0').all();
       this.db.pragma('journal_mode=WAL');
     } catch (error) { this.db.close(); throw error; }

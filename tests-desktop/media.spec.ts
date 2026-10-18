@@ -18,6 +18,7 @@ test('media imports Unicode paths, rejects unsafe files, deduplicates and surviv
       const bad=p.join(root,'fake.mp4'); fs.writeFileSync(bad,'not a video'); const empty=p.join(root,'empty.mp4'); fs.writeFileSync(empty,'');
       const link=p.join(root,'alias.mp4'); if(process.platform!=='win32')fs.symlinkSync(source,link);
       const first=await media.importFiles([source,copy,bad,empty,...(process.platform==='win32'?[]:[link]),p.join(root,'missing.mp4')]);
+      if(first.added!==1){const{inspectFixtureFile}=require(p.join(process.cwd(),'tests-desktop/media-diagnostics.cjs'));throw new Error('Fixture media import failed: '+JSON.stringify(first)+'; fixture file evidence: '+JSON.stringify(await inspectFixtureFile(source)));}
       fs.unlinkSync(source); const snapshot=repo.snapshot(); const asset=snapshot.assets[0];
       const account=repo.createAccount({name:'真实账号',group:'门店'});
       const tasks=repo.createTasks({assetId:asset.id,accountIds:[account.id],title:'任务快照标题'}); repo.updateAsset(asset.id,{title:'素材新标题',tag:'门店日常'});
@@ -41,7 +42,7 @@ test('missing and corrupt managed videos are blocked and can be repaired without
   try {
     let page=await app.firstWindow();
     await app.evaluate(({dialog},path)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[path]});},source);
-    await page.evaluate(async()=>{await window.xumu!.createAccount({name:'恢复账号',group:'门店'});await window.xumu!.importVideos();const state=await window.xumu!.getSnapshot();await window.xumu!.updateAsset(state.assets[0].id,{title:'保留的编辑标题',tag:'门店日常'});await window.xumu!.createTasks({assetId:state.assets[0].id,accountIds:[state.accounts[0].id],title:'原任务'});});
+    await page.evaluate(async()=>{await window.xumu!.createAccount({name:'恢复账号',group:'门店'});const report=await window.xumu!.importVideos();if(report.added!==1)throw new Error('Fixture media import failed: '+JSON.stringify(report));const state=await window.xumu!.getSnapshot();await window.xumu!.updateAsset(state.assets[0].id,{title:'保留的编辑标题',tag:'门店日常'});await window.xumu!.createTasks({assetId:state.assets[0].id,accountIds:[state.accounts[0].id],title:'原任务'});});
     for(const damage of ['missing','corrupt']) {
       const before=await page.evaluate(()=>window.xumu!.getSnapshot());await app.close();
       const mediaDir=join(dir,'media');const file=join(mediaDir,(await readdir(mediaDir)).find(f=>!f.startsWith('.'))!);

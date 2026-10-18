@@ -23,15 +23,21 @@ async function createIdentityFixture(root, options = {}) {
         if (response.stall) return;
         return route.fulfill(response);
       }
-      if (url.pathname === '/' && url.hostname === 'creator.douyin.com') return route.fulfill({ status: 302, headers: { location: '/creator-micro/home' } });
-      return route.fulfill({ contentType: 'text/html; charset=utf-8', body: `<h1>本地夹具</h1><script>fetch('${observedPath}?aid=2906&fixture=PRIVATE_QUERY').then(r=>r.text()).finally(()=>window.fixtureLoaded=true)</script>` });
+      return route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<h1>本地夹具</h1>' });
     });
     return context;
   } });
   async function open(index) {
     await manager.open(accounts[index].id);
     await manager.withAccountPage(accounts[index].id, async page => {
-      await page.waitForFunction(() => window.fixtureLoaded === true);
+      await page.goto('https://creator.douyin.com/creator-micro/home', { waitUntil: 'load' });
+      // Prepare the observed resource explicitly, not through a page's inline
+      // bootstrap callback. A fetch failure now surfaces its actual cause.
+      await page.evaluate(async resource => {
+        const response = await fetch(resource);
+        if (!response.ok) throw new Error('fixture account request failed: ' + response.status);
+        await response.text();
+      }, observedPath + '?aid=2906&fixture=PRIVATE_QUERY');
       await page.waitForFunction(() => performance.getEntriesByType('resource').some(entry => new URL(entry.name).pathname.replace(/\/$/, '') === '/account/api/v1/user/account/info'));
     });
   }

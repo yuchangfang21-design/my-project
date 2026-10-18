@@ -51,46 +51,43 @@ test('identity reads the observed self-account endpoint with exact numeric IDs a
   } finally { await app.close(); await rm(root, { recursive: true, force: true }); }
 });
 
-test('identity refuses unobserved or foreign pages and does not follow account response redirects', async () => {
+for (const scenario of ['unobserved', 'foreign', 'redirect', 'navigation_race']) test(`identity boundary ${scenario} refuses unsupported sources without a false binding`, async () => {
   const root = await mkdtemp(join(tmpdir(), 'xumu-identity-origin-')); const app = await launchDesktop(root);
   try {
-    const result = await app.evaluate(async (_electron, dir) => {
+    const result = await app.evaluate(async (_electron, input) => {
       const require = process.getBuiltinModule('module')!.createRequire(process.cwd() + '/package.json');
       const p = require('node:path');
       const { createIdentityFixture } = require(p.join(process.cwd(), 'tests-desktop/identity-fixture.cjs'));
       const { readIdentity } = require(p.join(process.cwd(), 'dist-desktop/desktop/browser/douyin.js'));
-      const f = await createIdentityFixture(dir);
+      const f = await createIdentityFixture(input.dir);
       try {
         await f.open(0);
-        const context = f.contexts.get(f.accounts[0].id), extra = await context.newPage();
-        await extra.route('**/blank', (route: any) => route.fulfill({ contentType: 'text/html', body: '<p>no resource</p>' }));
-        await extra.goto('https://creator.douyin.com/blank');
-        const count = f.requests.length;
-        const unseen = await readIdentity(extra);
-        await extra.goto('https://foreign.invalid/blank');
-        const foreign = await readIdentity(extra);
-        const noRequests = count === f.requests.length;
-        await extra.close();
-        const foreignCount = f.foreignRequests.length;
-        f.responses.set(f.accounts[0].id, { status: 302, body: '', headers: { location: 'https://foreign.invalid/account/api/v1/user/account/info' } });
-        const redirected = await f.manager.withAccountPage(f.accounts[0].id, (page: any) => readIdentity(page));
-        const redirectNotFollowed = foreignCount === f.foreignRequests.length;
-        const beforeRace = f.requests.length;
-        const raced = await f.manager.withAccountPage(f.accounts[0].id, async (page: any) => {
+        const context = f.contexts.get(f.accounts[0].id);
+        if (input.scenario === 'unobserved' || input.scenario === 'foreign') {
+          const page = await context.newPage();
+          await page.route('**/blank', (route: any) => route.fulfill({ contentType: 'text/html', body: '<p>no resource</p>' }));
+          await page.goto(input.scenario === 'foreign' ? 'https://foreign.invalid/blank' : 'https://creator.douyin.com/blank');
+          const count = f.requests.length, read = await readIdentity(page);
+          return { read, requestDelta: f.requests.length - count, redirectNotFollowed: true };
+        }
+        const foreignCount = f.foreignRequests.length, count = f.requests.length;
+        if (input.scenario === 'redirect') {
+          f.responses.set(f.accounts[0].id, { status: 302, body: '', headers: { location: 'https://foreign.invalid/account/api/v1/user/account/info' } });
+          const read = await f.manager.withAccountPage(f.accounts[0].id, (page: any) => readIdentity(page));
+          return { read, requestDelta: f.requests.length - count, redirectNotFollowed: foreignCount === f.foreignRequests.length };
+        }
+        const read = await f.manager.withAccountPage(f.accounts[0].id, async (page: any) => {
           const evaluate = page.evaluate.bind(page);
           page.evaluate = async (fn: any, args: any) => { await page.goto('https://foreign.invalid/blank'); return evaluate(fn, args); };
           try { return await readIdentity(page); } finally { page.evaluate = evaluate; }
         });
-        return { unseen, foreign, noRequests, redirected, redirectNotFollowed, raced, raceNoRequests: beforeRace === f.requests.length };
+        return { read, requestDelta: f.requests.length - count, redirectNotFollowed: true };
       } finally { await f.close(); }
-    }, root);
-    expect(result.unseen).toMatchObject({ identity: null, summary: { status: 'endpoint_unseen' } });
-    expect(result.foreign.identity).toBeNull();
-    expect(result.noRequests).toBe(true);
-    expect(result.redirected.identity).toBeNull();
+    }, { dir: root, scenario });
+    expect(result.read.identity).toBeNull();
+    expect(result.read.summary.status).toBe(scenario === 'redirect' ? 'unavailable' : scenario === 'navigation_race' ? 'page_changed' : 'endpoint_unseen');
+    expect(result.requestDelta).toBe(scenario === 'redirect' ? 1 : 0);
     expect(result.redirectNotFollowed).toBe(true);
-    expect(result.raced).toMatchObject({ identity: null, summary: { status: 'page_changed' } });
-    expect(result.raceNoRequests).toBe(true);
   } finally { await app.close(); await rm(root, { recursive: true, force: true }); }
 });
 

@@ -19,4 +19,14 @@
 首次原生ACL运行 [39121671116](https://github.com/yuchangfang21-design/my-project/actions/runs/39121671116)，源码 `dbf448b`，在Get-Acl自动加载Microsoft.PowerShell.Security模块时失败，尚未修改ACL、未进入拒写验证。接下来显式Import-Module同名模块以显示内部加载错误；该步用于定位工具链，不改产品迁移逻辑。
 
 
-显式导入探测 [39121881123](https://github.com/yuchangfang21-design/my-project/actions/runs/39121881123)，源码 `5576d16`，显示ObjectSecurity的Access/Sddl等扩展类型成员重复。工作流父shell为PowerShell7，而夹具明确启动Windows PowerShell5。当前只在子进程环境中移除继承的PSModulePath，让其重建自身默认路径，同时以宿主PSHOME下的绝对manifest导入系统Security模块；不忽略类型错误，不修改用户或机器环境配置。该诊断尚需后续原生结果确认。
+显式导入探测 [39121881123](https://github.com/yuchangfang21-design/my-project/actions/runs/39121881123)，源码 `5576d16`，显示ObjectSecurity的Access/Sddl等扩展类型成员重复。工作流父shell为PowerShell7，而夹具明确启动Windows PowerShell5。修复只在子进程环境中移除继承的PSModulePath，让其重建自身默认路径，同时以宿主PSHOME下的绝对manifest导入系统Security模块；不忽略类型错误，不修改用户或机器环境配置。
+
+## 最终验证
+
+Windows原生运行 [39122040630](https://github.com/yuchangfang21-design/my-project/actions/runs/39122040630)，标签 `desktop-permissions-native-2`，源码 `ece9260`，状态 **Success**。两项定向权限测试通过；随后完整桌面套件 **77通过、0失败、0跳过、0不稳定、0运行器错误**。报告产物为 `Windows-permission-test-results`，包含定向和完整JSON报告。原先两个Windows跳过项已被实际NTFS拒写验证覆盖。
+
+Linux完整桌面套件也为77通过、0失败、0跳过。独立审阅的两项Minor均已修正。此后Windows模块路径修复仅影响测试夹具，不改变Linux分支或产品逻辑。
+
+本轮只修改测试、测试工作流和说明；`desktop/`、`src/`、`shared/`、依赖声明与锁文件、打包配置均与0.4.1成功安装包源码 `75ed22a` 一致，因此继续使用[已有0.4.1安装包](https://github.com/yuchangfang21-design/my-project/actions/runs/39118990826)，无需重新下载安装包来获得本轮验证。
+
+这些结果证明备份拒写会阻止迁移并保留原数据库，以及恢复权限后可升级。用户尚未下载安装；手动安装、卸载、官方扫码身份核验及真实发布、评论读写仍待实机验收，私信尚未接通。

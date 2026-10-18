@@ -24,6 +24,8 @@ Linux 图形测试需要 Xvfb 或已有 DISPLAY，缺少默认 Xvfb 时可设置
 
 **Windows安装包：** [0.4.1成功构建与下载入口](https://github.com/yuchangfang21-design/my-project/actions/runs/39118990826)。登录GitHub后，在该页 **Artifacts** 中下载 **Xumu-Windows-x64**，解压ZIP并运行 `Xumu-0.4.1-win-x64.exe`；随包提供 `SHA256SUMS.txt`。本次Windows原生桌面75项通过、2项既有POSIX权限测试跳过，打包后程序3项通过。具体记录见[Windows构建跟进](docs/windows-build-followup.md)。
 
+**后续权限验证：** [Windows原生补充验收](https://github.com/yuchangfang21-design/my-project/actions/runs/39122040630)已用NTFS ACL覆盖上述两项跳过场景，完整桌面套件77项通过、0失败、0跳过；备份无法创建时保留旧数据库，恢复权限后可升级。产品源码与上述安装包一致，继续使用0.4.1。详见[权限验证记录](docs/windows-permissions-followup.md)。
+
 Windows 原生构建入口是仓库 Actions 的 **Build Windows desktop**。安装包实际生成并通过测试后，工作流提供 **Xumu-Windows-x64** 产物。构建未配置开发者签名，未运行的 Windows 验收不算通过；详见 [Windows 验收步骤](docs/windows-desktop-acceptance.md)。
 
 [打开 Windows 构建页面](https://github.com/yuchangfang21-design/my-project/actions/workflows/windows-build.yml) · [桌面实机运行截图](https://github.com/yuchangfang21-design/my-project/blob/preview/xumu-demo/artifacts/desktop-overview.png) · [评论阶段 B 交付与验证记录](docs/comments-stage-b-delivery.md) · [Windows 评论验收](docs/windows-comments-acceptance.md)

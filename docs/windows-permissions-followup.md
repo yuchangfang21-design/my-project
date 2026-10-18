@@ -14,3 +14,6 @@
 新夹具保存并恢复临时目录的原DACL，仅对当前SID拒绝目录CreateFiles，拒绝规则不继承到现有数据库文件。实际文件创建probe必须得到EACCES/EPERM；测试核对完整schema、所有表记录、外键及版本都未变化，无备份文件被创建；恢复权限后迁移成功。Linux仍使用原POSIX权限语义。
 
 一次独立只读审阅：Critical0、Important0、Minor2，均已修正。创建与删除probe的异常捕获分开，避免删除失败冒充创建拒绝；定向报告保存到Playwright输出清理目录之外，完整回归不会删除它。审阅不代替原生验证。
+
+
+首次原生ACL运行 [39121671116](https://github.com/yuchangfang21-design/my-project/actions/runs/39121671116)，源码 `dbf448b`，在Get-Acl自动加载Microsoft.PowerShell.Security模块时失败，尚未修改ACL、未进入拒写验证。接下来显式Import-Module同名模块以显示内部加载错误；该步用于定位工具链，不改产品迁移逻辑。

@@ -20,7 +20,7 @@ function scopedDirectory(root, directory) {
 }
 function powershell(directory, command, extra = {}) {
   const executable = path.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-  return execFileSync(executable, ['-NoProfile', '-NonInteractive', '-Command', "$ErrorActionPreference='Stop';$target=$env:XUMU_TEST_ACL_DIRECTORY;" + command], {
+  return execFileSync(executable, ['-NoProfile', '-NonInteractive', '-Command', "$ErrorActionPreference='Stop';Import-Module Microsoft.PowerShell.Security -ErrorAction Stop;$target=$env:XUMU_TEST_ACL_DIRECTORY;" + command], {
     encoding: 'utf8', windowsHide: true, timeout: 10000,
     env: { ...process.env, XUMU_TEST_ACL_DIRECTORY: directory, ...extra },
   }).trim();

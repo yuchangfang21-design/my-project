@@ -45,6 +45,7 @@ Windows 原生构建入口是仓库 Actions 的 **Build Windows desktop**。安�
 - [下载设计稿包](artifacts/xumu-next-stage-design.zip)：下载原始 ZIP 后解压，用 Edge 或 Chrome 打开 `index.html`，无需安装依赖。
 - [详细流程设计](docs/superpowers/specs/2026-10-17-publishing-and-inbox-experience-design.md)
 - [发布阶段 A 实施计划](docs/superpowers/plans/2026-10-17-publishing-stage-a.md)：数据库迁移、提交记录、确认与恢复、桌面接入和 Windows 实测，已按用户确认沿用直接开发方式执行，验证范围见本阶段交付记录。
+- [评论阶段 B 实施计划](docs/superpowers/plans/2026-10-18-comments-stage-b.md)：按账号归属、同步状态、500ms 草稿、逐条回复确认和恢复；新计划待审阅，尚未实现评论接入。
 
 ## 直接查看效果
 

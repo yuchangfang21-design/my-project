@@ -6,12 +6,12 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const script=resolve('scripts/summarize-desktop-results.mjs');
-async function run(report){
+async function run(report,kind){
  const folder=await mkdtemp(join(tmpdir(),'xumu-ci-summary-'));
  try{
   const input=join(folder,'results.json'),summary=join(folder,'summary.md');
   if(report!==undefined)await writeFile(input,JSON.stringify(report));
-  const result=spawnSync(process.execPath,[script,input],{encoding:'utf8',env:{...process.env,GITHUB_STEP_SUMMARY:summary}});
+  const result=spawnSync(process.execPath,[script,input,...(kind?[kind]:[])],{encoding:'utf8',env:{...process.env,GITHUB_STEP_SUMMARY:summary}});
   return{status:result.status,stdout:result.stdout,stderr:result.stderr,summary:await readFile(summary,'utf8').catch(()=> '')};
  }finally{await rm(folder,{recursive:true,force:true});}
 }
@@ -48,4 +48,10 @@ test('CI never annotates a source location outside the desktop test directory',a
 test('CI exposes complete totals even when GitHub limits per-step error annotations',async()=>{
  const input=report(Array.from({length:12},()=>({status:'unexpected',expectedStatus:'passed',results:[{status:'failed',error:{message:'Fixture failure'}}]})));
  const output=await run(input);assert.equal(output.status,0,output.stderr);assert.match(output.stdout,/::notice title=Desktop test totals::通过：0 · 失败：12 · 跳过：0/);assert.match(output.summary,/失败：12/);
+});
+
+
+test('CI labels packaged acceptance separately from desktop source tests',async()=>{
+ const output=await run(report([{status:'expected',expectedStatus:'passed',results:[{status:'passed'}]}]),'packaged');
+ assert.equal(output.status,0,output.stderr);assert.match(output.stdout,/::notice title=Packaged test totals::通过：1/);assert.match(output.summary,/Windows 打包程序验收/);assert.doesNotMatch(output.summary,/Windows 桌面测试/);
 });

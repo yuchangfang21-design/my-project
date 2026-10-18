@@ -30,11 +30,18 @@ jobs:
         if: always()
         run: node scripts/summarize-desktop-results.mjs desktop-test-results/results.json
       - name: Build Windows installer
+        id: windows_package
         run: ./scripts/build-windows-installer.ps1
         shell: pwsh
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      - run: npx playwright test -c playwright.packaged.config.ts
+      - name: Run packaged application acceptance
+        run: npx playwright test -c playwright.packaged.config.ts --reporter=list,json
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: desktop-test-results/packaged-results.json
+      - name: Summarize packaged application acceptance
+        if: always() && steps.windows_package.outcome == 'success'
+        run: node scripts/summarize-desktop-results.mjs desktop-test-results/packaged-results.json packaged
       - name: Hash Windows installers
         shell: pwsh
         run: |

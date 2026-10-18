@@ -64,3 +64,6 @@
 检查已安装的electron-builder 26.15.3源码并以其真实PublishManager构造器复现：标签上下文且未显式设置publish时，`isPublish=true`。原打包退出码尚没有详细日志，不能只凭该配置认定全部根因；但按既定“只构建、不创建公开Release”的范围，已明确加入 `--publish never`。该回归先RED（PUBLISH_ENABLED=true），随后GREEN；CI工具共9项通过。没有真实发布请求。
 
 主构建的打包步骤现在使用PowerShell脚本保存完整日志并在失败时生成精简错误注释，保留原npm退出码及全部交付门槛。另增只诊断打包的原生工作流，标签 `desktop-package-diagnostic-*`；它仅上传诊断日志，不运行交付流程或上传安装包，避免为每次取错误日志重跑已通过的整套桌面测试。只有完整主工作流成功并上传Xumu-Windows-x64才可交付。
+
+
+打包后程序验收也保留JSON结果和独立 `Packaged test totals` 注释，只有打包步骤成功后才汇总，区分源桌面测试与打包程序启动测试。新增标签区分回归先RED后GREEN，CI工具最终10项通过。仅增强结果可见性，没有移除测试或改变退出码。

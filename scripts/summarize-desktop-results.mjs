@@ -22,11 +22,12 @@ async function publish(summary,commands){
  for(const command of commands)process.stdout.write(command+'\n');
 }
 async function main(){
+ const packaged=process.argv[3]==='packaged',heading=packaged?'Windows 打包程序验收':'Windows 桌面测试',totalsTitle=packaged?'Packaged test totals':'Desktop test totals';
  let report;
  try{report=JSON.parse(await readFile(process.argv[2]??'desktop-test-results/results.json','utf8'));}
  catch(error){
   const missing=error?.code==='ENOENT';
-  await publish(`## Windows 桌面测试\n\n${missing?'未生成桌面测试报告，请检查前序构建或测试启动步骤。':'桌面测试报告无法解析，结果不可确认。'}`,[`::${missing?'warning':'error'}::${annotation(missing?'未生成桌面测试报告':'桌面测试报告无法解析')}`]);
+  await publish(`## ${heading}\n\n${missing?'未生成桌面测试报告，请检查前序构建或测试启动步骤。':'桌面测试报告无法解析，结果不可确认。'}`,[`::${missing?'warning':'error'}::${annotation(missing?'未生成桌面测试报告':'桌面测试报告无法解析')}`]);
   if(!missing)process.exitCode=1;
   return;
  }
@@ -37,8 +38,8 @@ async function main(){
  const expectedFailures=entries.filter(({test})=>test.status==='expected'&&test.expectedStatus==='failed').length;
  const errors=report.errors??[];
  const totals=`通过：${passed} · 失败：${failures.length} · 跳过：${skipped} · 不稳定：${flaky} · 预期失败：${expectedFailures} · 运行器错误：${errors.length}`;
- const commands=[`::notice title=Desktop test totals::${annotation(totals)}`];
- let summary=`## Windows 桌面测试\n\n${totals}\n`;
+ const commands=[`::notice title=${totalsTitle}::${annotation(totals)}`];
+ let summary=`## ${heading}\n\n${totals}\n`;
  if(!entries.length)summary+='\n没有执行任何桌面用例，不能据此判定通过。\n';
  for(const{spec,test,title}of failures){
   const result=test.results?.at(-1),detail=message(result?.error?.message??result?.errors?.[0]?.message??result?.status??'未提供详细错误');

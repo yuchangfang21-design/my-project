@@ -154,7 +154,9 @@ export class DouyinPrivatePublishAdapter implements PublishAdapter{
   const published=await link.evaluate(element=>{
    for(let parent=element.parentElement,depth=0;parent&&depth<7;parent=parent.parentElement,depth++){
     if(parent.getBoundingClientRect().height>420)break;
-    if(parent.querySelector('img')&&[...parent.querySelectorAll('*')].some(node=>!node.children.length&&node.textContent?.trim()==='已发布'&&!!node.getClientRects().length&&getComputedStyle(node).visibility!=='hidden'))return true;
+    // Creator covers may be CSS backgrounds; publication is established by
+    // the nearby visible status, captured work ID, detail URL and live owner.
+    if([...parent.querySelectorAll('*')].some(node=>!node.children.length&&node.textContent?.trim()==='已发布'&&!!node.getClientRects().length&&getComputedStyle(node).visibility!=='hidden'))return true;
    }return false;
   });if(!published)return null;
   const id=[...state.ids][0];let href=await link.getAttribute('href');

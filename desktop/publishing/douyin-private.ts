@@ -7,7 +7,7 @@ import type{PublishAdapter,PublishObservation,PreparePublicationInput}from'./ada
 import{verifiedWorkUrl}from'./work-url.js';
 import{PublishAdapterError}from'./adapter-error.js';
 const UPLOAD='https://creator.douyin.com/creator-micro/content/upload',WORKS='https://creator.douyin.com/creator-micro/content/manage';
-const VERSION='douyin-private-ui-v3';
+const VERSION='douyin-private-ui-v4';
 type Prepared={attemptId:string;identity:Identity;title:string;description:string;submitted:boolean;ids:Set<string>;requests:Set<Promise<void>>};
 function official(page:Page):boolean{try{const u=new URL(page.url());return u.origin==='https://creator.douyin.com'&&u.pathname.startsWith('/creator-micro/');}catch{return false;}}
 function exactId(value:unknown):string|null{return typeof value==='string'&&/^[1-9]\d{0,29}$/.test(value)?value:null;}
@@ -24,11 +24,17 @@ function responseWorkId(body:string):string|null{
  }
  return ids.length&&new Set(ids).size===1?ids[0]:null;
 }
+// Rich editors may insert U+200B/BOM without changing visible copy. Only
+// tolerate those in observed text when the requested copy contains neither.
+function descriptionsMatch(actual:string,expected:string):boolean{
+ const value=actual.replace(/\r\n/g,'\n').trimEnd();
+ return value===expected||(!/[\u200B\uFEFF]/.test(expected)&&value.replace(/[\u200B\uFEFF]/g,'')===expected);
+}
 export class DouyinPrivatePublishAdapter implements PublishAdapter{
  readonly worksUrl=WORKS;
  constructor(readonly publicationMode:'private_test'|'site_default_test'='private_test'){}
  private get requiresPrivate():boolean{return this.publicationMode==='private_test';}
- private get version():string{return this.requiresPrivate?VERSION:'douyin-site-default-ui-v1';}
+ private get version():string{return this.requiresPrivate?VERSION:'douyin-site-default-ui-v2';}
  private prepared=new WeakMap<Page,Prepared>();
  private readiness=new WeakMap<Page,Identity>();
  private title(page:Page):Locator{return page.locator('input[placeholder*="标题"]:visible');}
@@ -59,7 +65,7 @@ export class DouyinPrivatePublishAdapter implements PublishAdapter{
  }
  private async matches(page:Page,state:Prepared):Promise<boolean>{
   if(!official(page)||!await this.form(page))return false;
-  return await this.title(page).inputValue()===state.title&&(await this.description(page).innerText()).replace(/\r\n/g,'\n').trimEnd()===state.description&&(!this.requiresPrivate||await this.privacy(page).isChecked());
+  return await this.title(page).inputValue()===state.title&&descriptionsMatch(await this.description(page).innerText(),state.description)&&(!this.requiresPrivate||await this.privacy(page).isChecked());
  }
  async observe(page:Page):Promise<PublishObservation>{
   const no=(reason:string,identity:Identity|null=null):PublishObservation=>({identity,canPublish:false,publicationMode:this.publicationMode,version:this.version,reason});
@@ -131,8 +137,11 @@ export class DouyinPrivatePublishAdapter implements PublishAdapter{
      return label.trim()==='仅自己可见';
     }):[];
     if(!t||!d||!visible(b)||!unique('input[placeholder*="标题"]',t)||!unique('[contenteditable="true"]',d)||(args.requirePrivate&&(!p||radios.length!==1||radios[0]!==p)))throw new Error('发布表单已替换，已停止');
+    // Same narrow comparison as descriptionsMatch, inside the atomic click.
+    const body=d.innerText.replace(/\r\n/g,'\n').trimEnd();
+    const copyMatches=body===args.expectedDescription||(!/[\u200B\uFEFF]/.test(args.expectedDescription)&&body.replace(/[\u200B\uFEFF]/g,'')===args.expectedDescription);
     const rect=b.getBoundingClientRect(),top=document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2);
-    if(location.href!==args.expectedUrl||!t||t.value!==args.expectedTitle||!d||d.innerText.replace(/\r\n/g,'\n').trimEnd()!==args.expectedDescription||(args.requirePrivate&&(!p||!(p instanceof HTMLInputElement?p.checked:p.getAttribute('aria-checked')==='true')))||b.disabled||b.getAttribute('aria-disabled')==='true'||!rect.width||!rect.height||!top||!b.contains(top))throw new Error('提交控件或核对内容已变化');
+    if(location.href!==args.expectedUrl||!t||t.value!==args.expectedTitle||!d||!copyMatches||(args.requirePrivate&&(!p||!(p instanceof HTMLInputElement?p.checked:p.getAttribute('aria-checked')==='true')))||b.disabled||b.getAttribute('aria-disabled')==='true'||!rect.width||!rect.height||!top||!b.contains(top))throw new Error('提交控件或核对内容已变化');
     b.click();
    },{title,description,privacy,requirePrivate:this.requiresPrivate,expectedUrl,expectedTitle:state.title,expectedDescription:state.description});
    await page.waitForURL(url=>url.origin==='https://creator.douyin.com'&&url.pathname==='/creator-micro/content/manage',{timeout:15000});

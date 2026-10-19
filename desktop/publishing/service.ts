@@ -8,6 +8,8 @@ import type { MediaLibrary } from '../media/library.js';
 import type { SessionManager } from '../browser/session-manager.js';
 import type { PublishAdapter, PublishObservation } from './adapter.js';
 import type { OperationCoordinator } from './coordinator.js';
+import { verifiedWorkUrl } from './work-url.js';
+import { PublishAdapterError } from './adapter-error.js';
 import { id, record } from '../validation.js';
 
 type Budgets={observeMs:number;prepareMs:number;submitMs:number;readMs:number};
@@ -21,6 +23,7 @@ export class PublishingService {
   private active=new Map<string,{taskId:string;controller:AbortController}>();
   private closing=false;
   constructor(private store:PublishStore,private repository:Repository,private media:MediaLibrary,private sessions:SessionManager,private coordinator:OperationCoordinator,private adapter:PublishAdapter,private now:()=>number=Date.now,private budgets:Budgets=defaults){}
+  get publicationMode():'not_connected'|'private_test'{return this.adapter.publicationMode||'not_connected';}
   private requireOpen():void{if(this.closing)throw new Blocked('APP_CLOSING','应用正在关闭');}
   private identity(value:Identity|null):value is Identity{
     return !!value&&typeof value.remoteId==='string'&&!!value.remoteId.trim()&&value.remoteId===value.remoteId.trim()&&value.remoteId.length<=200&&typeof value.displayName==='string'&&!!value.displayName.trim()&&value.displayName.length<=200&&typeof value.observedAt==='string'&&Number.isFinite(Date.parse(value.observedAt));
@@ -61,8 +64,9 @@ export class PublishingService {
     try{
       await this.sessions.withAccountPage(task.accountId,async(page,contextId)=>{
         row.contextId=contextId;
-        const observation=await this.observation(task.accountId,page);version=observation.version;
-        if(observation.canPublish!==true)row.blockers.push({code:'CAPABILITY_UNVERIFIED',message:'发布接入待验证：当前账号尚无可用的发布能力'});
+        const observation=await this.observation(task.accountId,page);version=observation.version;row.publicationMode=observation.publicationMode;
+        if(row.publicationMode==='private_test'&&(task.title.length>30||task.description.length>1000||task.description!==task.description.trimEnd()||task.tags.length))row.blockers.push({code:'PRIVATE_COPY_UNSUPPORTED',message:'私密联调仅支持30字内标题、1000字内正文，无话题标签；正文末尾请勿留空白'});
+        if(observation.canPublish!==true)row.blockers.push({code:'CAPABILITY_UNVERIFIED',message:observation.reason||'发布接入待验证：当前账号尚无可用的发布能力'});
         try{row.identity=this.validateLive(task.accountId,observation);}catch{row.blockers.push({code:'LOGIN_REQUIRED',message:'账号身份未核实或与原绑定不一致，请重新登录核对'});}
       });
     }catch{
@@ -79,6 +83,7 @@ export class PublishingService {
     return this.coordinator.run(async()=>{
       this.requireOpen();const rows:PublishReviewRow[]=[],versions=new Map<string,string>();
       for(const taskId of ids){const observed=await this.inspect(taskId);rows.push(observed.row);versions.set(taskId,observed.version);}
+      if(rows.length>1&&rows.some(row=>row.publicationMode==='private_test'))for(const row of rows)row.blockers.push({code:'PRIVATE_SINGLE_ONLY',message:'首轮私密发布联调一次只能选择一个任务'});
       this.requireOpen();const created=this.now();
       for(const [key,value]of this.reviews)if(Date.parse(value.review.expiresAt)<=created)this.reviews.delete(key);
       const review:PublishReview={id:randomUUID(),createdAt:new Date(created).toISOString(),expiresAt:new Date(created+300000).toISOString(),rows,readyTaskIds:rows.filter(r=>!r.blockers.length).map(r=>r.taskId)};
@@ -100,7 +105,7 @@ export class PublishingService {
       if(!rows.length)throw new Error('没有可发布的任务，请先处理阻塞原因');
       for(const expected of rows){
         const current=await this.inspect(expected.taskId);
-        if(current.row.blockers.length||current.row.revision!==expected.revision||current.row.assetSha256!==expected.assetSha256||current.row.identity?.remoteId!==expected.identity?.remoteId||current.row.contextId!==expected.contextId||current.version!==saved.versions.get(expected.taskId))throw new Error('任务、账号或发布能力已变化，请重新核对');
+        if(current.row.blockers.length||current.row.publicationMode!==expected.publicationMode||current.row.revision!==expected.revision||current.row.assetSha256!==expected.assetSha256||current.row.identity?.remoteId!==expected.identity?.remoteId||current.row.contextId!==expected.contextId||current.version!==saved.versions.get(expected.taskId))throw new Error('任务、账号或发布能力已变化，请重新核对');
       }
       if(Date.parse(saved.review.expiresAt)<=this.now())throw new Error('核对清单已过期，请重新核对');
       this.requireOpen();return this.store.reserveBatch(reviewId,rows.map(row=>({...row,adapterVersion:saved.versions.get(row.taskId)})));
@@ -115,7 +120,7 @@ export class PublishingService {
     if(!attempt.snapshot||this.store.task(attempt.taskId).revision!==attempt.revision)throw new Blocked('TASK_CHANGED','任务已变化，请重新核对');
     const observed=await this.observation(attempt.snapshot.accountId,page),identity=this.validateLive(attempt.snapshot.accountId,observed);
     if(identity.remoteId!==attempt.targetRemoteId||contextId!==attempt.contextId)throw new Blocked('LOGIN_REQUIRED','当前账号窗口或身份已变化');
-    if(observed.canPublish!==true||observed.version!==attempt.adapterVersion)throw new Blocked('CAPABILITY_UNVERIFIED','发布能力已变化，请重新核对');
+    if(observed.publicationMode!==attempt.snapshot.publicationMode||observed.canPublish!==true||observed.version!==attempt.adapterVersion)throw new Blocked('CAPABILITY_UNVERIFIED','发布能力已变化，请重新核对');
   }
   private async runBatch(batchId:string):Promise<void>{
     for(const taskId of this.store.getBatch(batchId).taskIds){
@@ -134,7 +139,7 @@ export class PublishingService {
       await this.sessions.withAccountPage(attempt.snapshot.accountId,async(page,contextId)=>{
         const file=await this.media.verifiedPath(attempt.snapshot.assetId,attempt.snapshot.assetSha256);
         await this.checkLive(attempt,page,contextId);
-        await this.bounded(attempt.snapshot.accountId,this.budgets.prepareMs,()=>this.adapter.prepare(page,{file,title:attempt.snapshot.title,description:attempt.snapshot.description,tags:attempt.snapshot.tags},controller.signal));
+        await this.bounded(attempt.snapshot.accountId,this.budgets.prepareMs,()=>this.adapter.prepare(page,{attemptId:attempt.id,file,title:attempt.snapshot.title,description:attempt.snapshot.description,tags:attempt.snapshot.tags},controller.signal));
         await this.media.verifiedPath(attempt.snapshot.assetId,attempt.snapshot.assetSha256);
         await this.checkLive(attempt,page,contextId);
         this.requireOpen();this.store.beginSubmit(attempt.id);
@@ -146,7 +151,7 @@ export class PublishingService {
       });
     }catch(error){
       const current=this.store.getAttempt(taskId);
-      if(current?.id===attempt.id&&current.phase!=='finished')this.store.finishAttempt(attempt.id,{kind:current.phase==='submit_intent'?'review':'not_submitted',errorCode:this.closing?'APP_CLOSING':error instanceof Blocked?error.code:'PREPARE_FAILED'});
+      if(current?.id===attempt.id&&current.phase!=='finished')this.store.finishAttempt(attempt.id,{kind:current.phase==='submit_intent'?'review':'not_submitted',errorCode:this.closing?'APP_CLOSING':error instanceof Blocked||error instanceof PublishAdapterError?error.code:'PREPARE_FAILED'});
       this.store.pauseBatch(batchId);
     }finally{this.active.delete(attempt.id);}
   }
@@ -175,12 +180,11 @@ export class PublishingService {
   async openPublishPage(taskId:string):Promise<void>{
     this.requireOpen();const task=this.store.task(taskId),attempt=this.store.getAttempt(taskId),target=task.receipt?.officialUrl||this.adapter.worksUrl;
     if(!target)throw new Error('官方作品页入口待验证，请在账号登录窗口中查看');
-    const url=new URL(target);
-    if(url.protocol!=='https:'||url.hostname!=='creator.douyin.com'||url.port||url.username||url.password||url.search||url.hash)throw new Error('作品页不是已验证的官方入口');
+    const url=verifiedWorkUrl(target,task.receipt?.remoteWorkId);
     await this.coordinator.run(()=>this.sessions.withAccountPage(task.accountId,async(page)=>{
       const identity=this.validateLive(task.accountId,await this.observation(task.accountId,page));
       if(attempt&&identity.remoteId!==attempt.targetRemoteId)throw new Error('当前账号与任务目标不一致');
-      await page.goto(url.href,{waitUntil:'domcontentloaded',timeout:15000});
+      if(url.hostname==='www.douyin.com'){const detail=await page.context().newPage();try{await detail.goto(url.href,{waitUntil:'domcontentloaded',timeout:15000});}catch(error){await detail.close();throw error;}}else await page.goto(url.href,{waitUntil:'domcontentloaded',timeout:15000});
     }));
   }
   async close():Promise<void>{

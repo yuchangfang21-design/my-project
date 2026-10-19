@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import type { CreateTasksInput, DesktopTask } from '../../shared/desktop-contracts.js';
 import type { PublishDraftInput, PublishTaskDetails, PublicationReceipt, PublishReviewRow, PublishBatch, ManualCheckInput, RepostDraftInput } from '../../shared/publishing-contracts.js';
+import { verifiedWorkUrl } from '../publishing/work-url.js';
 import { id, record, text } from '../validation.js';
 
 export type AttemptRecord = { id:string; taskId:string; batchId:string; revision:number; targetRemoteId:string; contextId:string; adapterVersion:string; snapshot:PublishReviewRow; phase:'reserved'|'preparing'|'submit_intent'|'finished'; outcome:'none'|'not_submitted'|'submitted'|'review'; receipt?:PublicationReceipt; createdAt:string };
@@ -171,14 +172,15 @@ export class PublishStore {
       const task=this.task(attempt.taskId);
       this.writeAttempt({...attempt,phase:'finished',outcome:outcome.kind});
       this.writeTask({...task,status:outcome.kind==='review'?'review':outcome.errorCode==='LOGIN_REQUIRED'?'waiting_login':outcome.errorCode==='APP_CLOSING'?'pending':'failed'});
-      this.event(task.id,outcome.kind,outcome.kind==='review'?'提交结果不明确，请先核对官方记录':'本次未提交，请检查条件后重新核对',attempt.id);
+      const reasons:Record<string,string>={PRIVATE_FORM_UNSUPPORTED:'官网控件、草稿或上传状态未通过校验，请保持官方页并生成接入检查；本次未提交',PRIVATE_COPY_UNSUPPORTED:'私密联调的文案或标签不支持，请调整任务后重新核对',PRIVATE_COPY_CHANGED:'提交前账号、文案或私密设置发生变化，请先核对官方结果'};
+      this.event(task.id,outcome.kind,outcome.kind==='review'?'提交结果不明确，请先核对官方记录':reasons[outcome.errorCode]||'本次未提交，请检查条件后重新核对',attempt.id);
     })();
   }
   recordReceipt(attemptId:string,input:PublicationReceipt):void {
     const data=record(input,['remoteWorkId','accountRemoteId','officialUrl','state','observedAt']);
     const remoteWorkId=text(data.remoteWorkId,'作品标识',200),accountRemoteId=text(data.accountRemoteId,'目标身份',200);
     let url:URL;try{url=new URL(String(data.officialUrl));}catch{throw new Error('作品链接无效');}
-    if(url.protocol!=='https:'||url.hostname!=='creator.douyin.com'||url.port||url.username||url.password||url.search||url.hash)throw new Error('作品链接不是已验证的官方地址');
+    url=verifiedWorkUrl(url.href,remoteWorkId);
     if(!['pending_review','published','rejected','restricted'].includes(String(data.state))||typeof data.observedAt!=='string'||!Number.isFinite(Date.parse(data.observedAt)))throw new Error('作品回执无效');
     const receipt:PublicationReceipt={remoteWorkId,accountRemoteId,officialUrl:url.href,state:data.state as PublicationReceipt['state'],observedAt:data.observedAt};
     this.db.transaction(()=>{

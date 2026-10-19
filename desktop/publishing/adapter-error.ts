@@ -1,0 +1,3 @@
+export class PublishAdapterError extends Error {
+ constructor(readonly code:'PRIVATE_FORM_UNSUPPORTED'|'PRIVATE_COPY_UNSUPPORTED'|'PRIVATE_COPY_CHANGED'|'PRIVATE_ALREADY_SUBMITTED'|'LOGIN_REQUIRED',message:string){super(message);}
+}

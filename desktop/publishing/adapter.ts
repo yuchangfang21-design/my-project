@@ -2,10 +2,11 @@ import type { Page } from 'playwright-core';
 import type { Identity } from '../../shared/desktop-contracts.js';
 import type { PublicationReceipt } from '../../shared/publishing-contracts.js';
 import type { AttemptRecord } from '../storage/publish-store.js';
-export type PublishObservation={identity:Identity|null;canPublish:boolean;version:string;reason?:string};
-export type PreparePublicationInput={file:string;title:string;description:string;tags:string[]};
+export type PublishObservation={identity:Identity|null;canPublish:boolean;version:string;reason?:string;publicationMode?:'private_test'};
+export type PreparePublicationInput={attemptId?:string;file:string;title:string;description:string;tags:string[]};
 export interface PublishAdapter {
   readonly worksUrl:string|null;
+  readonly publicationMode?:'private_test';
   observe(page:Page):Promise<PublishObservation>;
   prepare(page:Page,input:PreparePublicationInput,signal:AbortSignal):Promise<void>;
   submit(page:Page):Promise<PublicationReceipt|null>;
@@ -18,3 +19,5 @@ export class UnverifiedPublishAdapter implements PublishAdapter {
   async submit(_page:Page):Promise<PublicationReceipt|null>{throw new Error('发布接入待验证');}
   async readResult(_page:Page,_attempt:AttemptRecord):Promise<PublicationReceipt|null>{throw new Error('作品结果读取待验证');}
 }
+
+export{DouyinPrivatePublishAdapter}from'./douyin-private.js';

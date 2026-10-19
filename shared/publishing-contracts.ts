@@ -2,7 +2,7 @@ import type { DesktopTask, Identity } from './desktop-contracts.js';
 export type PublishStatus = 'pending' | 'waiting_login' | 'running' | 'submitted' | 'published' | 'rejected' | 'failed' | 'review' | 'cancelled';
 export type PublicationReceipt = { remoteWorkId: string; accountRemoteId: string; officialUrl: string; state: 'pending_review' | 'published' | 'rejected' | 'restricted'; observedAt: string };
 export type PublishDraftInput = { taskId: string; expectedRevision: number; title: string; description: string; tags: string[] };
-export type PublishReviewRow = { taskId: string; revision: number; accountId: string; assetId: string; assetSha256: string; title: string; description: string; tags: string[]; identity: Identity | null; contextId: string | null; blockers: { code: string; message: string }[] };
+export type PublishReviewRow = { taskId: string; revision: number; accountId: string; assetId: string; assetSha256: string; title: string; description: string; tags: string[]; identity: Identity | null; contextId: string | null; publicationMode?: 'private_test'; blockers: { code: string; message: string }[] };
 export type PublishReview = { id: string; createdAt: string; expiresAt: string; rows: PublishReviewRow[]; readyTaskIds: string[] };
 export type PublishBatch = { id: string; reviewId: string; taskIds: string[]; state: 'running' | 'paused' | 'completed' };
 export type PublishEvent = { id: number; taskId: string; attemptId: string | null; kind: string; summary: string; createdAt: string };

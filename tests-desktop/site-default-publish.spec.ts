@@ -13,9 +13,9 @@ for(const scenario of['public_default','no_private_control','current_visibility_
    if(scenario==='unavailable_receipt')f.page.on('response',(response:any)=>{if(response.request().method()==='POST')response.body=async()=>{throw new Error('Synthetic unavailable response body');};});
    let receipt=null,error=false;try{receipt=await f.adapter.submit(f.page);}catch{error=true;}
    let duplicateBlocked=false;try{await f.adapter.submit(f.page);}catch{duplicateBlocked=true;}
-   return{available:true,observation,receipt,error,duplicateBlocked,posts:f.state.posts};
+   return{available:true,observation,receipt,diagnostic:f.adapter.resultDiagnostic(f.page),error,duplicateBlocked,posts:f.state.posts};
   }finally{await f.close();}
  },{root,scenario});expect(r.available).toBe(true);expect(r.observation?.publicationMode).toBe('site_default_test');
- if(scenario==='copy_changed'){expect(r.error).toBe(true);expect(r.posts).toEqual([]);}else{expect(r.error).toBe(false);expect(r.posts).toEqual([{title:'官网默认范围测试',description:'本地合成正文',visibility:scenario==='current_visibility_kept'?'private':'public'}]);if(['unavailable_receipt','hidden_status','status_other_row'].includes(scenario))expect(r.receipt).toBeNull();else expect(r.receipt).toMatchObject({state:'published',remoteWorkId:'9007199254741993'});expect(r.duplicateBlocked).toBe(true);}
+ if(scenario==='copy_changed'){expect(r.error).toBe(true);expect(r.posts).toEqual([]);}else{expect(r.error).toBe(false);expect(r.posts).toEqual([{title:'官网默认范围测试',description:'本地合成正文',visibility:scenario==='current_visibility_kept'?'private':'public'}]);if(['unavailable_receipt','hidden_status','status_other_row'].includes(scenario))expect(r.receipt).toBeNull();else expect(r.receipt).toMatchObject({state:'published',remoteWorkId:'9007199254741993'});expect(r.duplicateBlocked).toBe(true);if(scenario==='unavailable_receipt')expect(r.diagnostic).toBe('RECEIPT_RESPONSE_UNREADABLE');else if(scenario==='hidden_status'||scenario==='status_other_row')expect(r.diagnostic).toBe('RECEIPT_STATUS_UNMATCHED');else expect(r.diagnostic).toBeNull();}
  }finally{await app.close();await rm(root,{recursive:true,force:true});}
 });

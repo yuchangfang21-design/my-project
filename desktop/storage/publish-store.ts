@@ -4,6 +4,7 @@ import type { CreateTasksInput, DesktopTask } from '../../shared/desktop-contrac
 import type { PublishDraftInput, PublishTaskDetails, PublicationReceipt, PublishReviewRow, PublishBatch, ManualCheckInput, RepostDraftInput } from '../../shared/publishing-contracts.js';
 import { verifiedWorkUrl } from '../publishing/work-url.js';
 import { id, record, text } from '../validation.js';
+import { receiptDiagnosticMessages, type ReceiptDiagnosticCode } from '../publishing/receipt-diagnostic.js';
 
 export type AttemptRecord = { id:string; taskId:string; batchId:string; revision:number; targetRemoteId:string; contextId:string; adapterVersion:string; snapshot:PublishReviewRow; phase:'reserved'|'preparing'|'submit_intent'|'finished'; outcome:'none'|'not_submitted'|'submitted'|'review'; receipt?:PublicationReceipt; createdAt:string };
 export class PublishStore {
@@ -23,6 +24,15 @@ export class PublishStore {
     const attempt=this.db.prepare('SELECT id FROM publish_attempts WHERE task_id=? ORDER BY rowid DESC LIMIT 1').get(task.id) as any;
     const manual=attempt && this.db.prepare('SELECT result,note,created_at FROM publish_manual_checks WHERE task_id=? AND attempt_id=? ORDER BY id DESC LIMIT 1').get(task.id,attempt.id) as any;
     return {task,events,latestAttemptId:attempt?.id||null,manualCheck:manual?{result:manual.result,note:manual.note,createdAt:manual.created_at}:null};
+  }
+  recordResultDiagnostic(attemptId:string,code:ReceiptDiagnosticCode):void {
+    if(!Object.hasOwn(receiptDiagnosticMessages,code))throw new Error('回执诊断类型无效');
+    const attempt=this.attempt(attemptId);
+    if(this.getAttempt(attempt.taskId)?.id!==attempt.id||!['submit_intent','finished'].includes(attempt.phase)||attempt.outcome==='not_submitted')throw new Error('诊断不属于当前提交尝试');
+    if(this.task(attempt.taskId).receipt)return;
+    const summary=receiptDiagnosticMessages[code];
+    const previous=this.db.prepare("SELECT event FROM task_events WHERE attempt_id=? AND kind='receipt_diagnostic' ORDER BY id DESC LIMIT 1").get(attempt.id) as {event:string}|undefined;
+    if(previous?.event!==summary)this.event(attempt.taskId,'receipt_diagnostic',summary,attempt.id);
   }
   createTasks(input:CreateTasksInput):DesktopTask[] {
     const data=record(input,['assetId','accountIds','title']);const assetId=id(data.assetId),title=text(data.title,'作品标题',100);

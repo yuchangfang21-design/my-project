@@ -25,6 +25,9 @@ export class PublishingService {
   constructor(private store:PublishStore,private repository:Repository,private media:MediaLibrary,private sessions:SessionManager,private coordinator:OperationCoordinator,private adapter:PublishAdapter,private now:()=>number=Date.now,private budgets:Budgets=defaults){}
   get publicationMode():'not_connected'|'private_test'|'site_default_test'{return this.adapter.publicationMode||'not_connected';}
   private requireOpen():void{if(this.closing)throw new Blocked('APP_CLOSING','应用正在关闭');}
+  private recordResultDiagnostic(page:Page,attempt:AttemptRecord):void{
+    const code=this.adapter.resultDiagnostic?.(page);if(code)this.store.recordResultDiagnostic(attempt.id,code);
+  }
   private identity(value:Identity|null):value is Identity{
     return !!value&&typeof value.remoteId==='string'&&!!value.remoteId.trim()&&value.remoteId===value.remoteId.trim()&&value.remoteId.length<=200&&typeof value.displayName==='string'&&!!value.displayName.trim()&&value.displayName.length<=200&&typeof value.observedAt==='string'&&Number.isFinite(Date.parse(value.observedAt));
   }
@@ -143,11 +146,12 @@ export class PublishingService {
         await this.media.verifiedPath(attempt.snapshot.assetId,attempt.snapshot.assetSha256);
         await this.checkLive(attempt,page,contextId);
         this.requireOpen();this.store.beginSubmit(attempt.id);
-        const receipt=await this.bounded(attempt.snapshot.accountId,this.budgets.submitMs,()=>this.adapter.submit(page),()=>{
+        try{const receipt=await this.bounded(attempt.snapshot.accountId,this.budgets.submitMs,()=>this.adapter.submit(page),()=>{
           this.store.finishAttempt(attempt.id,{kind:'review',errorCode:'RESULT_UNKNOWN'});this.store.pauseBatch(batchId);
         });
         if(!receipt)throw new Blocked('RESULT_UNKNOWN','未取得可唯一核实的作品结果');
         this.store.recordReceipt(attempt.id,receipt);
+        }finally{this.recordResultDiagnostic(page,attempt);}
       });
     }catch(error){
       const current=this.store.getAttempt(taskId);
@@ -172,8 +176,9 @@ export class PublishingService {
     return this.coordinator.run(()=>this.sessions.withAccountPage(task.accountId,async(page)=>{
       const observed=await this.observation(task.accountId,page),identity=this.validateLive(task.accountId,observed);
       if(identity.remoteId!==attempt.targetRemoteId)throw new Error('当前账号与提交目标不一致');
-      const receipt=await this.bounded(task.accountId,this.budgets.readMs,()=>this.adapter.readResult(page,attempt));
+      try{const receipt=await this.bounded(task.accountId,this.budgets.readMs,()=>this.adapter.readResult(page,attempt));
       if(receipt)this.store.recordReceipt(attempt.id,receipt);
+      }finally{this.recordResultDiagnostic(page,attempt);}
       return this.store.getDetails(taskId);
     }));
   }

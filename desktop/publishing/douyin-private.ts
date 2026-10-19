@@ -6,9 +6,10 @@ import type{AttemptRecord}from'../storage/publish-store.js';
 import type{PublishAdapter,PublishObservation,PreparePublicationInput}from'./adapter.js';
 import{verifiedWorkUrl}from'./work-url.js';
 import{PublishAdapterError}from'./adapter-error.js';
+import type{ReceiptDiagnosticCode}from'./receipt-diagnostic.js';
 const UPLOAD='https://creator.douyin.com/creator-micro/content/upload',WORKS='https://creator.douyin.com/creator-micro/content/manage';
 const VERSION='douyin-private-ui-v4';
-type Prepared={attemptId:string;identity:Identity;title:string;description:string;submitted:boolean;ids:Set<string>;requests:Set<Promise<void>>};
+type Prepared={attemptId:string;identity:Identity;title:string;description:string;submitted:boolean;ids:Set<string>;requests:Set<Promise<void>>;captureReason?:ReceiptDiagnosticCode};
 function official(page:Page):boolean{try{const u=new URL(page.url());return u.origin==='https://creator.douyin.com'&&u.pathname.startsWith('/creator-micro/');}catch{return false;}}
 function exactId(value:unknown):string|null{return typeof value==='string'&&/^[1-9]\d{0,29}$/.test(value)?value:null;}
 function responseWorkId(body:string):string|null{
@@ -36,6 +37,9 @@ export class DouyinPrivatePublishAdapter implements PublishAdapter{
  private get requiresPrivate():boolean{return this.publicationMode==='private_test';}
  private get version():string{return this.requiresPrivate?VERSION:'douyin-site-default-ui-v2';}
  private prepared=new WeakMap<Page,Prepared>();
+ private diagnostics=new WeakMap<Page,ReceiptDiagnosticCode>();
+ resultDiagnostic(page:Page):ReceiptDiagnosticCode|null{return this.diagnostics.get(page)||null;}
+ private unknown(page:Page,code:ReceiptDiagnosticCode):null{this.diagnostics.set(page,code);return null;}
  private readiness=new WeakMap<Page,Identity>();
  private title(page:Page):Locator{return page.locator('input[placeholder*="标题"]:visible');}
  private description(page:Page):Locator{return page.locator('[contenteditable="true"]:visible');}
@@ -107,17 +111,22 @@ export class DouyinPrivatePublishAdapter implements PublishAdapter{
    await this.title(page).fill(input.title);await this.description(page).fill(input.description);if(this.requiresPrivate)await this.privacy(page).check();
    const state:Prepared={attemptId:input.attemptId,identity,title:input.title,description:input.description,submitted:false,ids:new Set(),requests:new Set()};
    if(signal.aborted||!await this.matches(page,state))throw new PublishAdapterError('PRIVATE_READBACK_FAILED','已核对内容未通过回读校验');
-   this.prepared.set(page,state);
+   this.diagnostics.delete(page);this.prepared.set(page,state);
   }finally{signal.removeEventListener('abort',abort);}
  }
  private async capture(response:Response,state:Prepared,witnesses:Set<Request>):Promise<void>{
   try{
    const request=response.request(),url=new URL(response.url());
-   if(request.method()!=='POST'||!['fetch','xhr'].includes(request.resourceType())||!witnesses.has(request)||url.origin!=='https://creator.douyin.com'||!/^\/web\/api\/(?:v\d+\/)?media\/aweme\/(?:create|publish)\/?$/.test(url.pathname)||!response.ok()||!/application\/json/i.test(response.headers()['content-type']||''))return;
+   if(request.method()!=='POST'||!['fetch','xhr'].includes(request.resourceType())||!witnesses.has(request)||url.origin!=='https://creator.douyin.com'||!/^\/web\/api\/(?:v\d+\/)?media\/aweme\/(?:create|publish)\/?$/.test(url.pathname))return;
+   state.captureReason='RECEIPT_RESPONSE_UNSUPPORTED';
+   if(!response.ok()||!/application\/json/i.test(response.headers()['content-type']||''))return;
+   state.captureReason='RECEIPT_RESPONSE_SIZE';
    const declared=Number(response.headers()['content-length']);if(!Number.isSafeInteger(declared)||declared<=0||declared>65536)return;
-   const body=await response.body();if(body.byteLength>65536)return;
+   state.captureReason='RECEIPT_RESPONSE_UNREADABLE';
+   const body=await response.body();if(body.byteLength>65536){state.captureReason='RECEIPT_RESPONSE_SIZE';return;}
+   state.captureReason='RECEIPT_ID_UNSUPPORTED';
    const id=responseWorkId(body.toString('utf8'));if(id)state.ids.add(id);
-  }catch{/* Unsupported responses stay uncertain; never trigger another submit. */}
+  }catch{/* Retain only the static failing stage, never the response or error. */}
  }
  async submit(page:Page):Promise<PublicationReceipt|null>{
   const state=this.prepared.get(page);if(!state||state.submitted)throw new PublishAdapterError('PRIVATE_ALREADY_SUBMITTED','没有就绪尝试或该尝试已经提交');
@@ -144,13 +153,18 @@ export class DouyinPrivatePublishAdapter implements PublishAdapter{
     if(location.href!==args.expectedUrl||!t||t.value!==args.expectedTitle||!d||!copyMatches||(args.requirePrivate&&(!p||!(p instanceof HTMLInputElement?p.checked:p.getAttribute('aria-checked')==='true')))||b.disabled||b.getAttribute('aria-disabled')==='true'||!rect.width||!rect.height||!top||!b.contains(top))throw new Error('提交控件或核对内容已变化');
     b.click();
    },{title,description,privacy,requirePrivate:this.requiresPrivate,expectedUrl,expectedTitle:state.title,expectedDescription:state.description});
+   this.diagnostics.set(page,'RECEIPT_PAGE_UNMATCHED');
    await page.waitForURL(url=>url.origin==='https://creator.douyin.com'&&url.pathname==='/creator-micro/content/manage',{timeout:15000});
    await Promise.all([...state.requests]);return await this.receipt(page,state);
   }finally{page.off('request',onRequest);page.off('response',listener);}
  }
  private async receipt(page:Page,state:Prepared):Promise<PublicationReceipt|null>{
-  if(!official(page)||new URL(page.url()).pathname!=='/creator-micro/content/manage'||state.ids.size!==1)return null;
+  if(!official(page)||new URL(page.url()).pathname!=='/creator-micro/content/manage')return this.unknown(page,'RECEIPT_PAGE_UNMATCHED');
+  if(!state.ids.size)return this.unknown(page,state.captureReason||'RECEIPT_RESPONSE_UNSEEN');
+  if(state.ids.size!==1)return this.unknown(page,'RECEIPT_ID_CONFLICT');
+  this.diagnostics.set(page,'RECEIPT_CAPTION_UNMATCHED');
   const caption=[state.title,state.description].filter(Boolean).join(' '),link=page.getByText(caption,{exact:true});if(await link.count()!==1)return null;
+  this.diagnostics.set(page,'RECEIPT_STATUS_UNMATCHED');
   const published=await link.evaluate(element=>{
    for(let parent=element.parentElement,depth=0;parent&&depth<7;parent=parent.parentElement,depth++){
     if(parent.getBoundingClientRect().height>420)break;
@@ -159,18 +173,22 @@ export class DouyinPrivatePublishAdapter implements PublishAdapter{
     if([...parent.querySelectorAll('*')].some(node=>!node.children.length&&node.textContent?.trim()==='已发布'&&!!node.getClientRects().length&&getComputedStyle(node).visibility!=='hidden'))return true;
    }return false;
   });if(!published)return null;
+  this.diagnostics.set(page,'RECEIPT_LINK_UNMATCHED');
   const id=[...state.ids][0];let href=await link.getAttribute('href');
   if(!href){
    const [popup]=await Promise.all([page.waitForEvent('popup',{timeout:5000}),link.click()]);
    try{await popup.waitForURL(url=>url.hostname==='www.douyin.com'&&url.pathname==='/user/self',{timeout:5000});href=popup.url();}finally{await popup.close();}
   }
   let url:URL;try{url=verifiedWorkUrl(new URL(href!,page.url()).href,id);}catch{return null;}if(url.hostname!=='www.douyin.com')return null;
+  this.diagnostics.set(page,'RECEIPT_OWNER_UNMATCHED');
   const identity=await observeIdentity(page);if(!identity||identity.remoteId!==state.identity.remoteId)return null;
+  this.diagnostics.delete(page);
   return{remoteWorkId:id,accountRemoteId:identity.remoteId,officialUrl:url.href,state:'published',observedAt:new Date().toISOString()};
  }
  async readResult(page:Page,attempt:AttemptRecord):Promise<PublicationReceipt|null>{
   const state=this.prepared.get(page);
-  if(!state?.submitted||state.attemptId!==attempt.id||attempt.adapterVersion!==this.version||attempt.snapshot.publicationMode!==this.publicationMode||state.identity.remoteId!==attempt.targetRemoteId||state.title!==attempt.snapshot.title||state.description!==attempt.snapshot.description)return null;
+  if(!state?.submitted)return this.unknown(page,'RECEIPT_STATE_MISSING');
+  if(state.attemptId!==attempt.id||attempt.adapterVersion!==this.version||attempt.snapshot.publicationMode!==this.publicationMode||state.identity.remoteId!==attempt.targetRemoteId||state.title!==attempt.snapshot.title||state.description!==attempt.snapshot.description)return this.unknown(page,'RECEIPT_ATTEMPT_MISMATCH');
   return this.receipt(page,state);
  }
 }

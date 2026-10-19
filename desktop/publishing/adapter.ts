@@ -2,6 +2,7 @@ import type { Page } from 'playwright-core';
 import type { Identity } from '../../shared/desktop-contracts.js';
 import type { PublicationReceipt } from '../../shared/publishing-contracts.js';
 import type { AttemptRecord } from '../storage/publish-store.js';
+import type { ReceiptDiagnosticCode } from './receipt-diagnostic.js';
 export type PublishObservation={identity:Identity|null;canPublish:boolean;version:string;reason?:string;publicationMode?:'private_test'|'site_default_test'};
 export type PreparePublicationInput={attemptId?:string;file:string;title:string;description:string;tags:string[]};
 export interface PublishAdapter {
@@ -11,6 +12,7 @@ export interface PublishAdapter {
   prepare(page:Page,input:PreparePublicationInput,signal:AbortSignal):Promise<void>;
   submit(page:Page):Promise<PublicationReceipt|null>;
   readResult(page:Page,attempt:AttemptRecord):Promise<PublicationReceipt|null>;
+  resultDiagnostic?(page:Page):ReceiptDiagnosticCode|null;
 }
 export class UnverifiedPublishAdapter implements PublishAdapter {
   readonly worksUrl=null;

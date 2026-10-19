@@ -18,7 +18,7 @@ async function createPrivatePublishFixture(root,options={}){
  await context.route('**/*',async route=>{
   const url=new URL(route.request().url()),path=url.pathname;
   if(url.origin==='https://creator.douyin.com'&&path==='/passport/account/info/v2/')return route.fulfill({contentType:'application/json',body:JSON.stringify({message:'success',data:{user_id_str:state.owner,screen_name:'PRIVATE_NAME',app_id:2906,is_visitor_account:false}})});
-  if(url.origin==='https://creator.douyin.com'&&path==='/web/api/media/aweme/create/'){
+  if(url.origin==='https://creator.douyin.com'&&path===(options.publishPath||'/web/api/media/aweme/create/')){
    const body=route.request().postDataJSON();state.posts.push(body);state.caption=[body.title,body.description].filter(Boolean).join(' ');state.publications++;
    const result=JSON.stringify({status_code:0,data:state.badReceipt?{}:{aweme_id:state.workId}});return route.fulfill({contentType:'application/json',headers:{'content-length':String(Buffer.byteLength(result))},body:result});
   }
@@ -26,7 +26,7 @@ async function createPrivatePublishFixture(root,options={}){
   if(path==='/creator-micro/content/upload')body=options.badForm?'<input type=file><input type=file>':`<h1>上传测试夹具</h1><input type="file" accept="video/*" id="file"><div id="form"></div><script>
    document.querySelector('#file').onchange=()=>{document.querySelector('#file').hidden=true;document.querySelector('#form').innerHTML='<input placeholder="填写作品标题" maxlength="30"><div contenteditable="true" role="textbox"></div><div id="privacy-group"><label><input type="radio" name="visibility" value="public" checked>公开</label><label><input type="radio" name="visibility" value="private">仅自己可见</label></div><button id="publish">发布</button><button>重新上传</button>';
    ${options.editorMarker?`const editor=document.querySelector('[contenteditable]'),marker=${JSON.stringify(options.editorMarker)};editor.dataset.modelText='';editor.prepend(document.createTextNode(marker));editor.addEventListener('input',()=>{const value=editor.innerText;editor.dataset.modelText=editor.textContent===''?'':value;editor.replaceChildren(document.createTextNode(marker+value));});`:''}
-   document.querySelector('#publish').onclick=async()=>{const body={title:document.querySelector('input[maxlength]').value,description:${options.editorMarker?"document.querySelector('[contenteditable]').dataset.modelText":"document.querySelector('[contenteditable]').innerText"},visibility:document.querySelector('input[name=visibility]:checked')?.value||'public'};await fetch('/web/api/media/aweme/create/',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());await window.__fixtureResponseReads();location.href='/creator-micro/content/manage';};};
+   document.querySelector('#publish').onclick=async()=>{const body={title:document.querySelector('input[maxlength]').value,description:${options.editorMarker?"document.querySelector('[contenteditable]').dataset.modelText":"document.querySelector('[contenteditable]').innerText"},visibility:document.querySelector('input[name=visibility]:checked')?.value||'public'};await fetch(${JSON.stringify(options.publishPath||'/web/api/media/aweme/create/')},{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());await window.__fixtureResponseReads();location.href='/creator-micro/content/manage';};};
   </script>`;
   if(path==='/creator-micro/content/upload'){
    state.uploadVisits++;

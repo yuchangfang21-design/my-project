@@ -31,12 +31,12 @@ for(const scenario of['success','visibility_changed','identity_changed','unknown
  }finally{await app.close();await rm(root,{recursive:true,force:true});}
 });
 
-test('private publishing review blocks batches and unsupported copy before any upload',async()=>{
+for(const publicationMode of['private_test','site_default_test'])test(publicationMode+' publishing review blocks batches and unsupported copy before any upload',async()=>{
  const root=await mkdtemp(join(tmpdir(),'xumu-private-review-')),app=await launchDesktop(root);
- try{const r=await app.evaluate(async(_e,root)=>{
+ try{const r=await app.evaluate(async(_e,{root,publicationMode})=>{
   const require=process.getBuiltinModule('module')!.createRequire(process.cwd()+'/package.json'),p=require('node:path'),{createServiceFixture}=require(p.join(process.cwd(),'tests-desktop/publishing-fixtures.cjs')),f=await createServiceFixture(root,{count:2});
-  try{const original=f.adapter.observe;f.adapter.observe=async(...args:any[])=>({...await original(...args),publicationMode:'private_test'});const batch=await f.service.reviewPublish({taskIds:f.tasks.map((t:any)=>t.id)});await f.service.updatePublishDraft({taskId:f.tasks[0].id,expectedRevision:1,title:'私密单条',description:'正文',tags:['不支持话题']});const tagged=await f.service.reviewPublish({taskIds:[f.tasks[0].id]});return{batch,tagged,uploads:f.state.prepareCalls.length};}finally{await f.close();}
- },root);expect(r.batch.readyTaskIds).toEqual([]);expect(r.tagged.readyTaskIds).toEqual([]);expect(r.tagged.rows[0].publicationMode).toBe('private_test');expect(r.uploads).toBe(0);
+  try{const original=f.adapter.observe;f.adapter.observe=async(...args:any[])=>({...await original(...args),publicationMode});const batch=await f.service.reviewPublish({taskIds:f.tasks.map((t:any)=>t.id)});await f.service.updatePublishDraft({taskId:f.tasks[0].id,expectedRevision:1,title:'私密单条',description:'正文',tags:['不支持话题']});const tagged=await f.service.reviewPublish({taskIds:[f.tasks[0].id]});return{batch,tagged,uploads:f.state.prepareCalls.length};}finally{await f.close();}
+ },{root,publicationMode});expect(r.batch.readyTaskIds).toEqual([]);expect(r.tagged.readyTaskIds).toEqual([]);expect(r.tagged.rows[0].publicationMode).toBe(publicationMode);expect(r.uploads).toBe(0);
  }finally{await app.close();await rm(root,{recursive:true,force:true});}
 });
 test('private publishing stores only matching self-modal receipt URLs',async()=>{

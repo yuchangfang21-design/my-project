@@ -26,14 +26,16 @@ function responseWorkId(body:string):string|null{
 }
 export class DouyinPrivatePublishAdapter implements PublishAdapter{
  readonly worksUrl=WORKS;
- readonly publicationMode='private_test' as const;
+ constructor(readonly publicationMode:'private_test'|'site_default_test'='private_test'){}
+ private get requiresPrivate():boolean{return this.publicationMode==='private_test';}
+ private get version():string{return this.requiresPrivate?VERSION:'douyin-site-default-ui-v1';}
  private prepared=new WeakMap<Page,Prepared>();
  private readiness=new WeakMap<Page,Identity>();
  private title(page:Page):Locator{return page.locator('input[placeholder*="标题"]:visible');}
  private description(page:Page):Locator{return page.locator('[contenteditable="true"]:visible');}
  private privacy(page:Page):Locator{return page.getByRole('radio',{name:'仅自己可见',exact:true});}
  private button(page:Page):Locator{return page.getByRole('button',{name:'发布',exact:true});}
- private async form(page:Page):Promise<boolean>{return await this.title(page).count()===1&&await this.description(page).count()===1&&await this.privacy(page).count()===1&&await this.button(page).count()===1;}
+ private async form(page:Page):Promise<boolean>{return await this.title(page).count()===1&&await this.description(page).count()===1&&(!this.requiresPrivate||await this.privacy(page).count()===1)&&await this.button(page).count()===1;}
  private async uploadReady(page:Page):Promise<void>{
   const expectedUrl=page.url();
   const sameUpload=()=>official(page)&&page.url()===expectedUrl&&new URL(page.url()).pathname==='/creator-micro/content/upload';
@@ -57,17 +59,17 @@ export class DouyinPrivatePublishAdapter implements PublishAdapter{
  }
  private async matches(page:Page,state:Prepared):Promise<boolean>{
   if(!official(page)||!await this.form(page))return false;
-  return await this.title(page).inputValue()===state.title&&(await this.description(page).innerText()).replace(/\r\n/g,'\n').trimEnd()===state.description&&await this.privacy(page).isChecked();
+  return await this.title(page).inputValue()===state.title&&(await this.description(page).innerText()).replace(/\r\n/g,'\n').trimEnd()===state.description&&(!this.requiresPrivate||await this.privacy(page).isChecked());
  }
  async observe(page:Page):Promise<PublishObservation>{
-  const no=(reason:string,identity:Identity|null=null):PublishObservation=>({identity,canPublish:false,publicationMode:'private_test',version:VERSION,reason});
+  const no=(reason:string,identity:Identity|null=null):PublishObservation=>({identity,canPublish:false,publicationMode:this.publicationMode,version:this.version,reason});
   if(!official(page))return no('请在该账号的官方创作者工作区打开发布页');
   let identity=await observeIdentity(page);if(!identity)return no('当前账号身份未核实');
   const state=this.prepared.get(page);
   if(state){
    if(identity.remoteId!==state.identity.remoteId)return no('当前账号已变化，请重新核对',identity);
-   if(!state.submitted&&!await this.matches(page,state))return no('文案或仅自己可见设置已变化，请重新核对',identity);
-   return{identity,canPublish:true,publicationMode:'private_test',version:VERSION};
+   if(!state.submitted&&!await this.matches(page,state))return no('文案或已核对设置已变化，请重新核对',identity);
+   return{identity,canPublish:true,publicationMode:this.publicationMode,version:this.version};
   }
   try{
    if(new URL(page.url()).pathname!=='/creator-micro/content/upload'){
@@ -75,12 +77,12 @@ export class DouyinPrivatePublishAdapter implements PublishAdapter{
     if(!identity||identity.remoteId!==prior)return no('打开发布页后账号身份发生变化',identity);
    }
    await this.uploadReady(page);
-   this.readiness.set(page,identity);return{identity,canPublish:true,publicationMode:'private_test',version:VERSION};
+   this.readiness.set(page,identity);return{identity,canPublish:true,publicationMode:this.publicationMode,version:this.version};
   }catch(error){return no(error instanceof PublishAdapterError?error.message:'无法读取官方上传页，请检查账号窗口后重新核对',identity);}
  }
  async prepare(page:Page,input:PreparePublicationInput,signal:AbortSignal):Promise<void>{
   if(signal.aborted)throw new PublishAdapterError('PRIVATE_FORM_UNSUPPORTED','准备已取消');
-  if(!input.attemptId||!input.title.trim()||input.title.length>30||input.description.length>1000||input.description!==input.description.trimEnd()||input.tags.length)throw new PublishAdapterError('PRIVATE_COPY_UNSUPPORTED','私密联调只支持30字内标题、1000字内正文和无标签的单视频');
+  if(!input.attemptId||!input.title.trim()||input.title.length>30||input.description.length>1000||input.description!==input.description.trimEnd()||input.tags.length)throw new PublishAdapterError('PRIVATE_COPY_UNSUPPORTED','单视频联调只支持30字内标题、1000字内正文和无标签的单视频');
   const prior=this.readiness.get(page);if(!prior)throw new PublishAdapterError('PRIVATE_FORM_UNSUPPORTED','请先完成发布前核对');
   if(this.prepared.get(page)?.attemptId===input.attemptId)throw new PublishAdapterError('PRIVATE_FORM_UNSUPPORTED','同一次尝试不能重复上传');
   const abort=()=>{void page.context().close().catch(()=>undefined);};signal.addEventListener('abort',abort,{once:true});
@@ -96,9 +98,9 @@ export class DouyinPrivatePublishAdapter implements PublishAdapter{
    await page.locator('input[type="file"]').setInputFiles(input.file);
    await this.title(page).waitFor({state:'visible',timeout:120000});
    if(!await this.form(page))throw new PublishAdapterError('PRIVATE_EDITOR_UNSUPPORTED','编辑页控件无法唯一匹配，已停止');
-   await this.title(page).fill(input.title);await this.description(page).fill(input.description);await this.privacy(page).check();
+   await this.title(page).fill(input.title);await this.description(page).fill(input.description);if(this.requiresPrivate)await this.privacy(page).check();
    const state:Prepared={attemptId:input.attemptId,identity,title:input.title,description:input.description,submitted:false,ids:new Set(),requests:new Set()};
-   if(signal.aborted||!await this.matches(page,state))throw new PublishAdapterError('PRIVATE_READBACK_FAILED','文案或私密设置未通过回读校验');
+   if(signal.aborted||!await this.matches(page,state))throw new PublishAdapterError('PRIVATE_READBACK_FAILED','已核对内容未通过回读校验');
    this.prepared.set(page,state);
   }finally{signal.removeEventListener('abort',abort);}
  }
@@ -113,26 +115,26 @@ export class DouyinPrivatePublishAdapter implements PublishAdapter{
  }
  async submit(page:Page):Promise<PublicationReceipt|null>{
   const state=this.prepared.get(page);if(!state||state.submitted)throw new PublishAdapterError('PRIVATE_ALREADY_SUBMITTED','没有就绪尝试或该尝试已经提交');
-  const identity=await observeIdentity(page);if(!identity||identity.remoteId!==state.identity.remoteId||!await this.matches(page,state))throw new PublishAdapterError('PRIVATE_COPY_CHANGED','提交前账号、文案或私密设置已变化');
+  const identity=await observeIdentity(page);if(!identity||identity.remoteId!==state.identity.remoteId||!await this.matches(page,state))throw new PublishAdapterError('PRIVATE_COPY_CHANGED','提交前账号或已核对内容已变化');
   const button=this.button(page);await button.scrollIntoViewIfNeeded();
   const witnesses=new Set<Request>(),onRequest=(request:Request)=>{try{if(request.frame()===page.mainFrame())witnesses.add(request);}catch{/* Service-worker or other-frame requests cannot prove this submission. */}};
   const listener=(response:Response)=>{const work=this.capture(response,state,witnesses);state.requests.add(work);void work.finally(()=>state.requests.delete(work));};
   page.on('request',onRequest);page.on('response',listener);state.submitted=true;
   try{
-   const title=await this.title(page).elementHandle(),description=await this.description(page).elementHandle(),privacy=await this.privacy(page).elementHandle(),expectedUrl=page.url();
+   const title=await this.title(page).elementHandle(),description=await this.description(page).elementHandle(),privacy=this.requiresPrivate?await this.privacy(page).elementHandle():null,expectedUrl=page.url();
    await button.evaluate((element,args)=>{
     const b=element as HTMLButtonElement,t=args.title as HTMLInputElement,d=args.description as HTMLElement,p=args.privacy as HTMLElement;
     const visible=(node:Element)=>node.isConnected&&node.ownerDocument===document&&!!node.getClientRects().length&&getComputedStyle(node).visibility!=='hidden';
     const unique=(selector:string,node:Element)=>[...document.querySelectorAll(selector)].filter(visible).length===1&&[...document.querySelectorAll(selector)].filter(visible)[0]===node;
-    const radios=[...document.querySelectorAll('input[type="radio"],[role="radio"]')].filter(visible).filter(node=>{
+    const radios=args.requirePrivate?[...document.querySelectorAll('input[type="radio"],[role="radio"]')].filter(visible).filter(node=>{
      const label=node.getAttribute('aria-label')||node.getAttribute('aria-labelledby')?.split(/\s+/).map(id=>document.getElementById(id)?.textContent||'').join(' ')||(node instanceof HTMLInputElement?[...(node.labels||[])].map(l=>l.textContent||'').join(' '):node.textContent)||'';
      return label.trim()==='仅自己可见';
-    });
-    if(!t||!d||!p||!visible(b)||!unique('input[placeholder*="标题"]',t)||!unique('[contenteditable="true"]',d)||radios.length!==1||radios[0]!==p)throw new Error('发布表单已替换，已停止');
+    }):[];
+    if(!t||!d||!visible(b)||!unique('input[placeholder*="标题"]',t)||!unique('[contenteditable="true"]',d)||(args.requirePrivate&&(!p||radios.length!==1||radios[0]!==p)))throw new Error('发布表单已替换，已停止');
     const rect=b.getBoundingClientRect(),top=document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2);
-    if(location.href!==args.expectedUrl||!t||t.value!==args.expectedTitle||!d||d.innerText.replace(/\r\n/g,'\n').trimEnd()!==args.expectedDescription||!p||!(p instanceof HTMLInputElement?p.checked:p.getAttribute('aria-checked')==='true')||b.disabled||b.getAttribute('aria-disabled')==='true'||!rect.width||!rect.height||!top||!b.contains(top))throw new Error('提交控件或核对内容已变化');
+    if(location.href!==args.expectedUrl||!t||t.value!==args.expectedTitle||!d||d.innerText.replace(/\r\n/g,'\n').trimEnd()!==args.expectedDescription||(args.requirePrivate&&(!p||!(p instanceof HTMLInputElement?p.checked:p.getAttribute('aria-checked')==='true')))||b.disabled||b.getAttribute('aria-disabled')==='true'||!rect.width||!rect.height||!top||!b.contains(top))throw new Error('提交控件或核对内容已变化');
     b.click();
-   },{title,description,privacy,expectedUrl,expectedTitle:state.title,expectedDescription:state.description});
+   },{title,description,privacy,requirePrivate:this.requiresPrivate,expectedUrl,expectedTitle:state.title,expectedDescription:state.description});
    await page.waitForURL(url=>url.origin==='https://creator.douyin.com'&&url.pathname==='/creator-micro/content/manage',{timeout:15000});
    await Promise.all([...state.requests]);return await this.receipt(page,state);
   }finally{page.off('request',onRequest);page.off('response',listener);}
@@ -157,7 +159,12 @@ export class DouyinPrivatePublishAdapter implements PublishAdapter{
  }
  async readResult(page:Page,attempt:AttemptRecord):Promise<PublicationReceipt|null>{
   const state=this.prepared.get(page);
-  if(!state?.submitted||state.attemptId!==attempt.id||attempt.adapterVersion!==VERSION||attempt.snapshot.publicationMode!=='private_test'||state.identity.remoteId!==attempt.targetRemoteId||state.title!==attempt.snapshot.title||state.description!==attempt.snapshot.description)return null;
+  if(!state?.submitted||state.attemptId!==attempt.id||attempt.adapterVersion!==this.version||attempt.snapshot.publicationMode!==this.publicationMode||state.identity.remoteId!==attempt.targetRemoteId||state.title!==attempt.snapshot.title||state.description!==attempt.snapshot.description)return null;
   return this.receipt(page,state);
  }
+}
+
+// Production follows the official visibility without reading or changing it.
+export class DouyinDefaultPublishAdapter extends DouyinPrivatePublishAdapter {
+ constructor(){super('site_default_test');}
 }

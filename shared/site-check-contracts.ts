@@ -10,7 +10,7 @@ export type AccountSiteCheck = {
   checkedAt: string;
   identity: 'not_observed' | 'observed';
   identityRead?: IdentityReadSummary;
-  publishing: 'not_connected' | 'private_test';
+  publishing: 'not_connected' | 'private_test'|'site_default_test';
   comments: 'not_connected';
   pages: SitePageCheck[];
 };

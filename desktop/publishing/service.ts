@@ -23,7 +23,7 @@ export class PublishingService {
   private active=new Map<string,{taskId:string;controller:AbortController}>();
   private closing=false;
   constructor(private store:PublishStore,private repository:Repository,private media:MediaLibrary,private sessions:SessionManager,private coordinator:OperationCoordinator,private adapter:PublishAdapter,private now:()=>number=Date.now,private budgets:Budgets=defaults){}
-  get publicationMode():'not_connected'|'private_test'{return this.adapter.publicationMode||'not_connected';}
+  get publicationMode():'not_connected'|'private_test'|'site_default_test'{return this.adapter.publicationMode||'not_connected';}
   private requireOpen():void{if(this.closing)throw new Blocked('APP_CLOSING','应用正在关闭');}
   private identity(value:Identity|null):value is Identity{
     return !!value&&typeof value.remoteId==='string'&&!!value.remoteId.trim()&&value.remoteId===value.remoteId.trim()&&value.remoteId.length<=200&&typeof value.displayName==='string'&&!!value.displayName.trim()&&value.displayName.length<=200&&typeof value.observedAt==='string'&&Number.isFinite(Date.parse(value.observedAt));
@@ -65,7 +65,7 @@ export class PublishingService {
       await this.sessions.withAccountPage(task.accountId,async(page,contextId)=>{
         row.contextId=contextId;
         const observation=await this.observation(task.accountId,page);version=observation.version;row.publicationMode=observation.publicationMode;
-        if(row.publicationMode==='private_test'&&(task.title.length>30||task.description.length>1000||task.description!==task.description.trimEnd()||task.tags.length))row.blockers.push({code:'PRIVATE_COPY_UNSUPPORTED',message:'私密联调仅支持30字内标题、1000字内正文，无话题标签；正文末尾请勿留空白'});
+        if(row.publicationMode&&(task.title.length>30||task.description.length>1000||task.description!==task.description.trimEnd()||task.tags.length))row.blockers.push({code:'PRIVATE_COPY_UNSUPPORTED',message:'单视频联调仅支持30字内标题、1000字内正文，无话题标签；正文末尾请勿留空白'});
         if(observation.canPublish!==true)row.blockers.push({code:'CAPABILITY_UNVERIFIED',message:observation.reason||'发布接入待验证：当前账号尚无可用的发布能力'});
         try{row.identity=this.validateLive(task.accountId,observation);}catch{row.blockers.push({code:'LOGIN_REQUIRED',message:'账号身份未核实或与原绑定不一致，请重新登录核对'});}
       });
@@ -83,7 +83,7 @@ export class PublishingService {
     return this.coordinator.run(async()=>{
       this.requireOpen();const rows:PublishReviewRow[]=[],versions=new Map<string,string>();
       for(const taskId of ids){const observed=await this.inspect(taskId);rows.push(observed.row);versions.set(taskId,observed.version);}
-      if(rows.length>1&&rows.some(row=>row.publicationMode==='private_test'))for(const row of rows)row.blockers.push({code:'PRIVATE_SINGLE_ONLY',message:'首轮私密发布联调一次只能选择一个任务'});
+      if(rows.length>1&&rows.some(row=>!!row.publicationMode))for(const row of rows)row.blockers.push({code:'PRIVATE_SINGLE_ONLY',message:'首轮发布联调一次只能选择一个任务'});
       this.requireOpen();const created=this.now();
       for(const [key,value]of this.reviews)if(Date.parse(value.review.expiresAt)<=created)this.reviews.delete(key);
       const review:PublishReview={id:randomUUID(),createdAt:new Date(created).toISOString(),expiresAt:new Date(created+300000).toISOString(),rows,readyTaskIds:rows.filter(r=>!r.blockers.length).map(r=>r.taskId)};

@@ -2,10 +2,19 @@
 const p=require('node:path');
 async function createPrivatePublishFixture(root,options={}){
  const{chromium}=require('playwright-core'),{findBrowser}=require(p.join(process.cwd(),'dist-desktop/desktop/browser/session-manager.js'));
- const Adapter=require(p.join(process.cwd(),'dist-desktop/desktop/publishing/adapter.js')).DouyinPrivatePublishAdapter;
+ const adapters=require(p.join(process.cwd(),'dist-desktop/desktop/publishing/adapter.js')),Adapter=options.siteDefault?adapters.DouyinDefaultPublishAdapter:adapters.DouyinPrivatePublishAdapter;
  if(!Adapter)return null;
  const browser=await chromium.launch({executablePath:findBrowser(),headless:true,args:process.platform==='linux'?['--no-sandbox']:[]}),context=await browser.newContext(),page=await context.newPage();
  const state={owner:'9007199254740993',posts:[],workId:'9007199254741993',publications:0,uploadVisits:0,caption:'',badReceipt:false};
+ // Keep the synthetic instant redirect from discarding CDP response bodies.
+ // Real failures still return unknown; this only coordinates fixture navigation.
+ const responseReads=new Set();
+ page.on('response',response=>{
+  if(response.request().method()!=='POST')return;
+  const read=response.body.bind(response);
+  response.body=()=>{const pending=read();responseReads.add(pending);void pending.then(()=>responseReads.delete(pending),()=>responseReads.delete(pending));return pending;};
+ });
+ await page.exposeFunction('__fixtureResponseReads',async()=>{await Promise.allSettled([...responseReads]);return null;});
  await context.route('**/*',async route=>{
   const url=new URL(route.request().url()),path=url.pathname;
   if(url.origin==='https://creator.douyin.com'&&path==='/passport/account/info/v2/')return route.fulfill({contentType:'application/json',body:JSON.stringify({message:'success',data:{user_id_str:state.owner,screen_name:'PRIVATE_NAME',app_id:2906,is_visitor_account:false}})});
@@ -16,7 +25,7 @@ async function createPrivatePublishFixture(root,options={}){
   let body='<h1>本地官网夹具</h1>';
   if(path==='/creator-micro/content/upload')body=options.badForm?'<input type=file><input type=file>':`<h1>上传测试夹具</h1><input type="file" accept="video/*" id="file"><div id="form"></div><script>
    document.querySelector('#file').onchange=()=>{document.querySelector('#file').hidden=true;document.querySelector('#form').innerHTML='<input placeholder="填写作品标题" maxlength="30"><div contenteditable="true" role="textbox"></div><div id="privacy-group"><label><input type="radio" name="visibility" value="public" checked>公开</label><label><input type="radio" name="visibility" value="private">仅自己可见</label></div><button id="publish">发布</button><button>重新上传</button>';
-   document.querySelector('#publish').onclick=async()=>{const body={title:document.querySelector('input[maxlength]').value,description:document.querySelector('[contenteditable]').innerText,visibility:document.querySelector('input[name=visibility]:checked').value};await fetch('/web/api/media/aweme/create/',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));location.href='/creator-micro/content/manage';};};
+   document.querySelector('#publish').onclick=async()=>{const body={title:document.querySelector('input[maxlength]').value,description:document.querySelector('[contenteditable]').innerText,visibility:document.querySelector('input[name=visibility]:checked')?.value||'public'};await fetch('/web/api/media/aweme/create/',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());await window.__fixtureResponseReads();location.href='/creator-micro/content/manage';};};
   </script>`;
   if(path==='/creator-micro/content/upload'){
    state.uploadVisits++;

@@ -10,7 +10,7 @@ import { MediaLibrary } from './media/library.js';
 import { SessionManager } from './browser/session-manager.js';
 import { PublishingService } from './publishing/service.js';
 import { OperationCoordinator } from './publishing/coordinator.js';
-import { DouyinPrivatePublishAdapter } from './publishing/adapter.js';
+import { DouyinDefaultPublishAdapter } from './publishing/adapter.js';
 let repository: Repository;
 let sessions: SessionManager;
 let media: MediaLibrary;
@@ -41,7 +41,7 @@ if (primaryInstance) app.whenReady().then(async () => {
   if (quitting) return;
   sessions = new SessionManager(join(app.getPath('userData'),'profiles'),repository);
   coordinator=new OperationCoordinator();
-  publishing=new PublishingService(repository.publishing,repository,media,sessions,coordinator,new DouyinPrivatePublishAdapter());
+  publishing=new PublishingService(repository.publishing,repository,media,sessions,coordinator,new DouyinDefaultPublishAdapter());
   ipcMain.handle('xumu:runtime', event => {
     if (event.senderFrame !== event.sender.mainFrame || !BrowserWindow.fromWebContents(event.sender)) throw new Error('不允许的调用来源');
     return { mode: 'desktop', version: app.getVersion() };

@@ -28,7 +28,7 @@ npm run test:packaged
 
 Linux 图形测试需要 Xvfb 或已有 DISPLAY，缺少默认 Xvfb 时可设置 `XUMU_XVFB_PATH`。Windows 不使用 Xvfb。SQLite 13 使用 npm 包中已验证可由 Electron 加载的 Node-API 预编译模块；不执行多余的 ABI 重编译。
 
-**Windows安装包：** [0.4.5账号核验版构建与下载入口](https://github.com/yuchangfang21-design/my-project/actions/runs/39197315750)。登录GitHub后，在该页 **Artifacts** 中下载 **Xumu-Windows-x64**，解压ZIP并运行 `Xumu-0.4.5-win-x64.exe`；随包提供 `SHA256SUMS.txt`。本次Windows原生桌面98项、打包后程序3项全部通过，均无失败或跳过。安装后打开已有账号的官方浏览器，保持窗口打开，返回账号卡片点击“检查状态”；若仍待确认，点击“生成接入检查”预览并复制新报告。无需删除原账号或导出登录会话。真实身份接口及响应格式已取得实机证据，新版软件识别结果和真实发布/评论仍待验收，具体记录见[账号核验说明](docs/account-identity-reader.md)。
+**Windows安装包：** [0.4.6私密发布联调版构建与下载入口](https://github.com/yuchangfang21-design/my-project/actions/runs/39206690728)。登录GitHub，在页面 **Artifacts** 下载 **Xumu-Windows-x64**（119MB），解压并运行 `Xumu-0.4.6-win-x64.exe`。Windows原生桌面106项、打包后程序3项全部通过，无失败或跳过。保留原账号配置；首次只测试一个私密任务，按[测试步骤](docs/private-publishing-trial.md)操作。CI通过不代表真实站点发布已验收。
 
 **权限验证：** [Windows原生补充验收](https://github.com/yuchangfang21-design/my-project/actions/runs/39122040630)已用NTFS ACL覆盖0.4.1中原先跳过的两项场景，完整桌面套件77项通过、0失败、0跳过；备份无法创建时保留旧数据库，恢复权限后可升级。0.4.2完整构建也执行了这些测试。详见[权限验证记录](docs/windows-permissions-followup.md)。
 

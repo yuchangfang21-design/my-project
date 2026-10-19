@@ -172,7 +172,7 @@ export class PublishStore {
       const task=this.task(attempt.taskId);
       this.writeAttempt({...attempt,phase:'finished',outcome:outcome.kind});
       this.writeTask({...task,status:outcome.kind==='review'?'review':outcome.errorCode==='LOGIN_REQUIRED'?'waiting_login':outcome.errorCode==='APP_CLOSING'?'pending':'failed'});
-      const reasons:Record<string,string>={PRIVATE_FORM_UNSUPPORTED:'官网控件、草稿或上传状态未通过校验，请保持官方页并生成接入检查；本次未提交',PRIVATE_COPY_UNSUPPORTED:'私密联调的文案或标签不支持，请调整任务后重新核对',PRIVATE_COPY_CHANGED:'提交前账号、文案或私密设置发生变化，请先核对官方结果'};
+      const reasons:Record<string,string>={PRIVATE_UPLOAD_NOT_READY:'官网上传控件尚未就绪或无法唯一定位；请保持上传页后重新核对，本次未提交',PRIVATE_DRAFT_PRESENT:'官方上传页已有编辑内容，请先在官网核对草稿；本次未覆盖或提交',PRIVATE_DUPLICATE_COPY:'官方作品列表已有相同文案，请更换未发布过的新标题；本次未提交',PRIVATE_EDITOR_UNSUPPORTED:'已进入编辑阶段，但标题、正文、私密选项或发布按钮无法唯一识别；本次未提交',PRIVATE_READBACK_FAILED:'文案或仅自己可见设置未通过回读校验；本次未提交',PRIVATE_FORM_UNSUPPORTED:'官网控件、草稿或上传状态未通过校验，请保持官方页并生成接入检查；本次未提交',PRIVATE_COPY_UNSUPPORTED:'私密联调的文案或标签不支持，请调整任务后重新核对',PRIVATE_COPY_CHANGED:'提交前账号、文案或私密设置发生变化，请先核对官方结果'};
       this.event(task.id,outcome.kind,outcome.kind==='review'?'提交结果不明确，请先核对官方记录':reasons[outcome.errorCode]||'本次未提交，请检查条件后重新核对',attempt.id);
     })();
   }

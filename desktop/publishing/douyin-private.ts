@@ -7,7 +7,7 @@ import type{PublishAdapter,PublishObservation,PreparePublicationInput}from'./ada
 import{verifiedWorkUrl}from'./work-url.js';
 import{PublishAdapterError}from'./adapter-error.js';
 const UPLOAD='https://creator.douyin.com/creator-micro/content/upload',WORKS='https://creator.douyin.com/creator-micro/content/manage';
-const VERSION='douyin-private-ui-v1';
+const VERSION='douyin-private-ui-v2';
 type Prepared={attemptId:string;identity:Identity;title:string;description:string;submitted:boolean;ids:Set<string>;requests:Set<Promise<void>>};
 function official(page:Page):boolean{try{const u=new URL(page.url());return u.origin==='https://creator.douyin.com'&&u.pathname.startsWith('/creator-micro/');}catch{return false;}}
 function exactId(value:unknown):string|null{return typeof value==='string'&&/^[1-9]\d{0,29}$/.test(value)?value:null;}
@@ -34,6 +34,16 @@ export class DouyinPrivatePublishAdapter implements PublishAdapter{
  private privacy(page:Page):Locator{return page.getByRole('radio',{name:'仅自己可见',exact:true});}
  private button(page:Page):Locator{return page.getByRole('button',{name:'发布',exact:true});}
  private async form(page:Page):Promise<boolean>{return await this.title(page).count()===1&&await this.description(page).count()===1&&await this.privacy(page).count()===1&&await this.button(page).count()===1;}
+ private async uploadReady(page:Page):Promise<void>{
+  const expectedUrl=page.url();
+  const sameUpload=()=>official(page)&&page.url()===expectedUrl&&new URL(page.url()).pathname==='/creator-micro/content/upload';
+  if(!sameUpload())throw new PublishAdapterError('PRIVATE_UPLOAD_NOT_READY','未处于官方视频上传页；本次未提交');
+  try{await page.locator('input[type="file"]').first().waitFor({state:'attached',timeout:10000});}
+  catch{throw new PublishAdapterError('PRIVATE_UPLOAD_NOT_READY','上传控件在10秒内未就绪，请保持官方上传页；本次未提交');}
+  if(!sameUpload())throw new PublishAdapterError('PRIVATE_UPLOAD_NOT_READY','等待上传控件时页面已变化；本次未提交');
+  if(await this.description(page).count())throw new PublishAdapterError('PRIVATE_DRAFT_PRESENT','官方上传页已有编辑内容，请先在官网核对草稿；本次未覆盖或提交');
+  if(await page.locator('input[type="file"]').count()!==1)throw new PublishAdapterError('PRIVATE_UPLOAD_NOT_READY','官网存在多个上传控件，无法唯一定位视频；本次未提交');
+ }
  private async matches(page:Page,state:Prepared):Promise<boolean>{
   if(!official(page)||!await this.form(page))return false;
   return await this.title(page).inputValue()===state.title&&(await this.description(page).innerText()).replace(/\r\n/g,'\n').trimEnd()===state.description&&await this.privacy(page).isChecked();
@@ -53,9 +63,9 @@ export class DouyinPrivatePublishAdapter implements PublishAdapter{
     const prior=identity.remoteId;await page.goto(UPLOAD,{waitUntil:'domcontentloaded',timeout:10000});identity=await observeIdentity(page);
     if(!identity||identity.remoteId!==prior)return no('打开发布页后账号身份发生变化',identity);
    }
-   if(await page.locator('input[type="file"]').count()!==1||await this.description(page).count())return no('上传页控件不匹配或有未完成草稿，请在官网核对；本次不会覆盖草稿',identity);
+   await this.uploadReady(page);
    this.readiness.set(page,identity);return{identity,canPublish:true,publicationMode:'private_test',version:VERSION};
-  }catch{return no('无法读取官方上传页，请检查账号窗口后重新核对',identity);}
+  }catch(error){return no(error instanceof PublishAdapterError?error.message:'无法读取官方上传页，请检查账号窗口后重新核对',identity);}
  }
  async prepare(page:Page,input:PreparePublicationInput,signal:AbortSignal):Promise<void>{
   if(signal.aborted)throw new PublishAdapterError('PRIVATE_FORM_UNSUPPORTED','准备已取消');
@@ -67,17 +77,18 @@ export class DouyinPrivatePublishAdapter implements PublishAdapter{
    await page.goto(WORKS,{waitUntil:'domcontentloaded',timeout:10000});
    await page.getByText('内容管理',{exact:true}).waitFor({timeout:5000});
    const caption=[input.title,input.description].filter(Boolean).join(' ');
-   if(await page.getByText(caption,{exact:true}).count())throw new PublishAdapterError('PRIVATE_FORM_UNSUPPORTED','官方列表已有相同文案，请使用可唯一核对的新标题');
+   if(await page.getByText(caption,{exact:true}).count())throw new PublishAdapterError('PRIVATE_DUPLICATE_COPY','官方列表已有相同文案，请使用可唯一核对的新标题');
    await page.goto(UPLOAD,{waitUntil:'domcontentloaded',timeout:10000});
-   if(!official(page)||await page.locator('input[type="file"]').count()!==1||await this.description(page).count())throw new PublishAdapterError('PRIVATE_FORM_UNSUPPORTED','上传页已有草稿或控件变化，已停止');
-   const identity=await observeIdentity(page);if(!identity||identity.remoteId!==prior.remoteId)throw new PublishAdapterError('PRIVATE_FORM_UNSUPPORTED','上传前账号身份已变化');
+   await this.uploadReady(page);
+   const identity=await observeIdentity(page);if(!identity||identity.remoteId!==prior.remoteId)throw new PublishAdapterError('LOGIN_REQUIRED','上传前账号身份已变化');
    if(signal.aborted)throw new PublishAdapterError('PRIVATE_FORM_UNSUPPORTED','准备已取消');
+   await this.uploadReady(page);
    await page.locator('input[type="file"]').setInputFiles(input.file);
    await this.title(page).waitFor({state:'visible',timeout:120000});
-   if(!await this.form(page))throw new PublishAdapterError('PRIVATE_FORM_UNSUPPORTED','编辑页控件无法唯一匹配，已停止');
+   if(!await this.form(page))throw new PublishAdapterError('PRIVATE_EDITOR_UNSUPPORTED','编辑页控件无法唯一匹配，已停止');
    await this.title(page).fill(input.title);await this.description(page).fill(input.description);await this.privacy(page).check();
    const state:Prepared={attemptId:input.attemptId,identity,title:input.title,description:input.description,submitted:false,ids:new Set(),requests:new Set()};
-   if(signal.aborted||!await this.matches(page,state))throw new PublishAdapterError('PRIVATE_FORM_UNSUPPORTED','文案或私密设置未通过回读校验');
+   if(signal.aborted||!await this.matches(page,state))throw new PublishAdapterError('PRIVATE_READBACK_FAILED','文案或私密设置未通过回读校验');
    this.prepared.set(page,state);
   }finally{signal.removeEventListener('abort',abort);}
  }

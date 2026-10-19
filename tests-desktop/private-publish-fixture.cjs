@@ -23,6 +23,12 @@ async function createPrivatePublishFixture(root,options={}){
    if((options.delayInitial&&state.uploadVisits===1)||(options.delayReturn&&state.uploadVisits===2))body+=`<script>const pendingFile=document.querySelector('#file');pendingFile.remove();setTimeout(()=>{document.body.append(pendingFile);${options.draftAfterDelay?`document.querySelector('#form').innerHTML='<div contenteditable="true">既有草稿不可覆盖</div>';`:''}},500);</script>`;
   }
   if(path==='/creator-micro/content/manage')body='<h1>内容管理</h1>'+(!state.publications?'':`<article style="height:200px"><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" width=100 height=100><a target="_blank" href="https://www.douyin.com/user/self?modal_id=${state.workId}">${state.caption}</a><span>已发布</span></article>`);
+  if(path==='/creator-micro/content/manage'){
+   if(options.duplicateMenu)body='<nav>内容管理</nav>'+body;
+   const listStatus='<button>作品 ('+(state.publications|| (options.existingCaption?1:0))+')</button>'+(options.existingCaption?'<p>'+options.existingCaption+'</p>':'');
+   if(options.delayList)body+='<div id="loaded-list"></div><script>setTimeout(()=>{document.querySelector("#loaded-list").innerHTML='+JSON.stringify(listStatus)+';},500);</script>';
+   else body+=listStatus;
+  }
   return route.fulfill({contentType:'text/html; charset=utf-8',body});
  });
  await page.goto('https://creator.douyin.com/creator-micro/home');

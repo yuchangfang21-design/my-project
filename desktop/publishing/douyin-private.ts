@@ -7,7 +7,7 @@ import type{PublishAdapter,PublishObservation,PreparePublicationInput}from'./ada
 import{verifiedWorkUrl}from'./work-url.js';
 import{PublishAdapterError}from'./adapter-error.js';
 const UPLOAD='https://creator.douyin.com/creator-micro/content/upload',WORKS='https://creator.douyin.com/creator-micro/content/manage';
-const VERSION='douyin-private-ui-v2';
+const VERSION='douyin-private-ui-v3';
 type Prepared={attemptId:string;identity:Identity;title:string;description:string;submitted:boolean;ids:Set<string>;requests:Set<Promise<void>>};
 function official(page:Page):boolean{try{const u=new URL(page.url());return u.origin==='https://creator.douyin.com'&&u.pathname.startsWith('/creator-micro/');}catch{return false;}}
 function exactId(value:unknown):string|null{return typeof value==='string'&&/^[1-9]\d{0,29}$/.test(value)?value:null;}
@@ -44,6 +44,17 @@ export class DouyinPrivatePublishAdapter implements PublishAdapter{
   if(await this.description(page).count())throw new PublishAdapterError('PRIVATE_DRAFT_PRESENT','官方上传页已有编辑内容，请先在官网核对草稿；本次未覆盖或提交');
   if(await page.locator('input[type="file"]').count()!==1)throw new PublishAdapterError('PRIVATE_UPLOAD_NOT_READY','官网存在多个上传控件，无法唯一定位视频；本次未提交');
  }
+ private async openWorks(page:Page):Promise<void>{
+  try{
+   await page.goto(WORKS,{waitUntil:'domcontentloaded',timeout:10000});
+   const expectedUrl=page.url();
+   if(!official(page)||new URL(expectedUrl).pathname!=='/creator-micro/content/manage')throw new Error('Unexpected works page');
+   // The navigation and page title share 内容管理. Read the loaded work-count
+   // indicator instead; this is a read-only readiness check, never a click target.
+   await page.getByText(/^作品\s*[（(]\s*\d+\s*[）)]$/).filter({visible:true}).first().waitFor({timeout:5000});
+   if(page.url()!==expectedUrl)throw new Error('Works page changed');
+  }catch{throw new PublishAdapterError('PRIVATE_WORKS_NOT_READY','官方作品列表未就绪，已停止重复文案检查；尚未上传或点击发布');}
+ }
  private async matches(page:Page,state:Prepared):Promise<boolean>{
   if(!official(page)||!await this.form(page))return false;
   return await this.title(page).inputValue()===state.title&&(await this.description(page).innerText()).replace(/\r\n/g,'\n').trimEnd()===state.description&&await this.privacy(page).isChecked();
@@ -74,8 +85,7 @@ export class DouyinPrivatePublishAdapter implements PublishAdapter{
   if(this.prepared.get(page)?.attemptId===input.attemptId)throw new PublishAdapterError('PRIVATE_FORM_UNSUPPORTED','同一次尝试不能重复上传');
   const abort=()=>{void page.context().close().catch(()=>undefined);};signal.addEventListener('abort',abort,{once:true});
   try{
-   await page.goto(WORKS,{waitUntil:'domcontentloaded',timeout:10000});
-   await page.getByText('内容管理',{exact:true}).waitFor({timeout:5000});
+   await this.openWorks(page);
    const caption=[input.title,input.description].filter(Boolean).join(' ');
    if(await page.getByText(caption,{exact:true}).count())throw new PublishAdapterError('PRIVATE_DUPLICATE_COPY','官方列表已有相同文案，请使用可唯一核对的新标题');
    await page.goto(UPLOAD,{waitUntil:'domcontentloaded',timeout:10000});

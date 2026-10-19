@@ -1,10 +1,12 @@
 # 序幕 · 创作者工作台
 
-Windows 多账号运营工具，包含 HTML 界面演示和 **0.4.10 Electron 单视频发布联调版**。桌面版保存账号、真实视频副本及任务，管理独立账号浏览器。用户已实机确认0.4.5身份读取成功；当前单账号、单视频发布沿用官网当前可见范围，可能公开，真实发布仍待Windows实机验收。评论工作台与草稿为本地功能，评论读取/回复和私信尚未接通。
+Windows 多账号运营工具，包含 HTML 界面演示和 **0.4.10 Electron 单视频发布联调版**。桌面版保存账号、真实视频副本及任务，管理独立账号浏览器。用户已实机确认0.4.5身份读取成功；当前单账号、单视频发布沿用官网当前可见范围，可能公开，用户已实机确认单视频真实发布成功；软件自动回执同步仍未完成。评论工作台与草稿为本地功能，评论读取/回复和私信尚未接通。
 
 **历史0.4.2接入检查版：** 新增账号卡片“生成接入检查”，预览和复制本机只读报告，无需查地址或导出浏览器会话；账号身份识别、真实发布和评论仍未接通。报告用于后续联调，不能视为这些功能已完成。进展见[官方接入跟进](docs/official-site-integration-followup.md)。
 
 **0.4.5账号核验版：** 官网SDK与用户实机响应已确认登录检查使用`/passport/account/info/v2/`，返回`message:success + data.user_id/user_id_str/screen_name`。软件已改用该接口，并支持首页/上传页没有资源历史时只读核验；拒绝访客、跨应用、重复绑定和错号。旧账号类型接口与收入统计均不再作为身份依据。发布、评论及私信仍未接通。见[账号核验说明](docs/account-identity-reader.md)。
+
+**0.4.10实机结果：** 用户已确认通过软件提交的作品在官方内容管理显示“已发布”，真实上传、文案填写和发布动作已跑通。软件仍显示“结果待核对”，自动作品ID/回执绑定尚待定位；人工“已找到作品”只保留核对记录。不要重新提交这条已发布任务。
 
 **0.4.10正文回读修复：** 兼容富文本编辑器插入的零宽字符/BOM，避免可见正文相同仍被拦截；准备和提交前均采用相同比较规则，仍核对真实文字及emoji，沿用官网可见范围，可能公开。
 
@@ -36,7 +38,7 @@ npm run test:packaged
 
 Linux 图形测试需要 Xvfb 或已有 DISPLAY，缺少默认 Xvfb 时可设置 `XUMU_XVFB_PATH`。Windows 不使用 Xvfb。SQLite 13 使用 npm 包中已验证可由 Electron 加载的 Node-API 预编译模块；不执行多余的 ABI 重编译。
 
-**Windows安装包：** [0.4.10正文回读修复版下载入口](https://github.com/yuchangfang21-design/my-project/actions/runs/39235459488)。登录GitHub，在页面 **Artifacts** 下载 **Xumu-Windows-x64**（119MB），解压并运行 `Xumu-0.4.10-win-x64.exe`。Windows原生桌面123项、打包后程序3项全部通过，无失败或跳过。保留原账号配置；一次只核对一个任务，发布沿用官网当前可见范围，可能公开。按[测试步骤](docs/private-publishing-trial.md)操作。CI通过不代表真实站点发布已验收。
+**Windows安装包：** [0.4.10正文回读修复版下载入口](https://github.com/yuchangfang21-design/my-project/actions/runs/39235459488)。登录GitHub，在页面 **Artifacts** 下载 **Xumu-Windows-x64**（119MB），解压并运行 `Xumu-0.4.10-win-x64.exe`。Windows原生桌面123项、打包后程序3项全部通过，无失败或跳过。保留原账号配置；一次只核对一个任务，发布沿用官网当前可见范围，可能公开。按[测试步骤](docs/private-publishing-trial.md)操作。该版已取得用户单视频官网“已发布”证据；软件自动回执状态仍待核对。
 
 **权限验证：** [Windows原生补充验收](https://github.com/yuchangfang21-design/my-project/actions/runs/39122040630)已用NTFS ACL覆盖0.4.1中原先跳过的两项场景，完整桌面套件77项通过、0失败、0跳过；备份无法创建时保留旧数据库，恢复权限后可升级。0.4.2完整构建也执行了这些测试。详见[权限验证记录](docs/windows-permissions-followup.md)。
 

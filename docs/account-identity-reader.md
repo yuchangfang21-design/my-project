@@ -59,3 +59,5 @@
 用户新增首页报告实际确认响应根节点为 `status_code:number`、`account_info:object`，旧解析器要求 `message:success + data`，因此在ID解析前即返回unsupported_response。新分支要求根status_code严格为0，拒绝错误message、混合data/account_info及错误登录标志。内部仍只接受精确的user_id/user_id_str；名称候选为screen_name或user_name。内部字段尚无用户设备证据，未知结构继续保持待确认，报告只增加account_info下允许的字段名称与类型，不输出值。原data格式与错号、重复绑定、隐私限制保持原验证要求。
 
 新回归先失败，修复后与旧长ID/错号、未知格式/隐私用例一起定向3项通过。为减少额度消耗，不重复本地完整套件；完整验证交由单次Windows工作流，实际结果另记录。此项修补不接通真实发布、评论或私信。
+
+0.4.4实际安装包：[完整Windows构建39190379771](https://github.com/yuchangfang21-design/my-project/actions/runs/39190379771)，标签`desktop-build-0.4.4-account-info-1`，源码`787be8cb2d1e9b6031d0c655f78172e6bdd30e41`，Success，8分59秒。桌面97项及打包3项全部通过，0失败、0跳过、0不稳定、0运行器错误。工作流的前端、浏览器和CI工具步骤均通过。产物`Xumu-Windows-x64`为119MB；解压运行`Xumu-0.4.4-win-x64.exe`，返回原账号点击“检查状态”。exe SHA256为`df22f2a059534805798cf718e08f6afcde53997fa01855002e6782755625eebe`，ZIP摘要为`421f29eeb7e0889fc6a7ea43fc9c99ae1c6f73578fdb77e856565974bae14802`。最后仅更新说明，不重新打包。不宣称用户内部字段已确认或真实发布/评论已接通。

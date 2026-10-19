@@ -50,11 +50,18 @@ export async function readIdentity(page: Page): Promise<IdentityRead> {
           return value;
         });
         const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
-        const allowedKeys = ['message', 'data', 'error_code', 'status_code', 'user_id', 'user_id_str', 'uid', 'screen_name', 'nickname', 'username', 'is_login', 'user_info', 'account_info', 'profile'];
+        const allowedKeys = ['message', 'data', 'error_code', 'status_code', 'user_id', 'user_id_str', 'uid', 'screen_name', 'user_name', 'nickname', 'username', 'is_login', 'user_info', 'account_info', 'profile'];
         const types = (value: unknown) => !isRecord(value) ? {} : Object.fromEntries(allowedKeys.filter(key => Object.hasOwn(value, key)).map(key => [key, value[key] === null ? 'null' : Array.isArray(value[key]) ? 'array' : typeof value[key]]));
-        const data = isRecord(payload) ? payload.data : undefined;
-        const fields = { root: types(payload), data: types(data) };
-        if (!isRecord(payload) || !isRecord(data) || payload.message !== 'success') return fail('unsupported_response', fields);
+        const accountInfo = isRecord(payload) && Object.hasOwn(payload, 'account_info');
+        const data = isRecord(payload) ? (accountInfo ? payload.account_info : payload.data) : undefined;
+        const fields = { root: types(payload), data: accountInfo ? {} : types(data), ...(accountInfo ? { account_info: types(data) } : {}) };
+        if (!isRecord(payload) || !isRecord(data)) return fail('unsupported_response', fields);
+        // The user's actual report confirms this root envelope, but not its
+        // nested ID/name fields. Unknown fields still cannot bind an account.
+        const envelopeAccepted = accountInfo
+          ? payload.status_code === 0 && !Object.hasOwn(payload, 'data') && (!Object.hasOwn(payload, 'message') || payload.message === 'success')
+          : payload.message === 'success';
+        if (!envelopeAccepted) return fail('unsupported_response', fields);
         for (const object of [payload, data]) {
           for (const key of ['error_code', 'status_code']) if (Object.hasOwn(object, key) && object[key] !== 0) return fail('unsupported_response', fields);
           if (Object.hasOwn(object, 'is_login') && object.is_login !== true && object.is_login !== 1) return fail('not_authenticated', fields);
@@ -63,9 +70,10 @@ export async function readIdentity(page: Page): Promise<IdentityRead> {
         if (Object.hasOwn(data, 'user_id_str')) candidates.push(data.user_id_str);
         if (Object.hasOwn(data, 'user_id')) candidates.push(typeof data.user_id === 'number' ? exactIds.get(data) ?? (Number.isSafeInteger(data.user_id) ? String(data.user_id) : null) : data.user_id);
         if (!candidates.length || candidates.some(value => typeof value !== 'string' || !/^[1-9]\d{0,29}$/.test(value)) || new Set(candidates).size !== 1) return fail('unsupported_response', fields);
-        if (typeof data.screen_name !== 'string' || !data.screen_name.trim() || data.screen_name.trim().length > 100 || /[\u0000-\u001f\u007f]/.test(data.screen_name)) return fail('unsupported_response', fields);
+        const displayName = accountInfo ? (data.screen_name ?? data.user_name) : data.screen_name;
+        if (typeof displayName !== 'string' || !displayName.trim() || displayName.trim().length > 100 || /[\u0000-\u001f\u007f]/.test(displayName)) return fail('unsupported_response', fields);
         if (location.href !== expectedUrl) return fail('page_changed');
-        return { identity: { remoteId: `douyin-account:${candidates[0]}`, displayName: data.screen_name.trim() }, summary: { status: 'verified', fields } } satisfies Result;
+        return { identity: { remoteId: `douyin-account:${candidates[0]}`, displayName: displayName.trim() }, summary: { status: 'verified', fields } } satisfies Result;
       } catch { return fail('unavailable'); }
       finally { clearTimeout(timer); controller.abort(); }
     }, { expectedUrl, endpoint: SELF_ACCOUNT_PATH });

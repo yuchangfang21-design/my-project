@@ -167,3 +167,36 @@ test('identity rejects malformed responses and exposes only allowlisted field ty
     expect(JSON.stringify([result.report, result.unauthorizedReport])).not.toContain('PRIVATE_');
   } finally { await app.close(); await rm(root, { recursive: true, force: true }); }
 });
+
+test('identity handles the observed account_info envelope without exporting account values', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'xumu-identity-account-info-')); const app = await launchDesktop(root);
+  try {
+    const result = await app.evaluate(async (_electron, dir) => {
+      const require = process.getBuiltinModule('module')!.createRequire(process.cwd() + '/package.json');
+      const { createIdentityFixture } = require(require('node:path').join(process.cwd(), 'tests-desktop/identity-fixture.cjs'));
+      const f = await createIdentityFixture(dir);
+      try {
+        await f.open(0);
+        const refresh = async (body: string) => { f.responses.set(f.accounts[0].id, { body, contentType: 'application/json' }); return f.manager.refresh(f.accounts[0].id); };
+        const unknown = await refresh(JSON.stringify({ status_code: 0, account_info: { uid: 'PRIVATE_ID', user_name: 'PRIVATE_NAME', mobile: 'PRIVATE_PHONE' } }));
+        const report = await f.manager.inspect(f.accounts[0].id);
+        const accepted = await refresh('{"status_code":0,"account_info":{"user_id":9007199254740993,"user_name":"PRIVATE_NAME"}}');
+        const rejected = [];
+        for (const payload of [
+          { status_code: 9, account_info: { user_id_str: '9007199254740993', user_name: 'PRIVATE_NAME' } },
+          { account_info: { user_id_str: '9007199254740993', user_name: 'PRIVATE_NAME' } },
+          { status_code: 0, account_info: { user_id_str: '9007199254740993', user_id: '9007199254740994', user_name: 'PRIVATE_NAME' } },
+          { status_code: 0, account_info: { user_id_str: '9007199254740993', user_name: 'PRIVATE_NAME', is_login: false } },
+          { status_code: 0, data: { user_id_str: '9007199254740994', screen_name: 'OTHER' }, account_info: { user_id_str: '9007199254740993', user_name: 'PRIVATE_NAME' } },
+          { status_code: 0, account_info: { user_id_str: '9007199254740994', user_name: 'SWITCHED' } },
+        ]) rejected.push((await refresh(JSON.stringify(payload))).status);
+        return { unknown, report, accepted, rejected };
+      } finally { await f.close(); }
+    }, root);
+    expect(result.unknown.status).toBe('pending_confirmation');
+    expect(result.report.identityRead?.fields).toMatchObject({ root: { status_code: 'number', account_info: 'object' }, account_info: { uid: 'string', user_name: 'string' } });
+    expect(JSON.stringify(result.report)).not.toContain('PRIVATE_');
+    expect(result.accepted).toMatchObject({ status: 'logged_in', identity: { remoteId: 'douyin-account:9007199254740993', displayName: 'PRIVATE_NAME' } });
+    expect(result.rejected).toEqual(Array(6).fill('pending_confirmation'));
+  } finally { await app.close(); await rm(root, { recursive: true, force: true }); }
+});

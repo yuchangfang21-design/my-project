@@ -17,5 +17,5 @@ export type AccountSiteCheck = {
 export type IdentityReadSummary = {
   checkedAt?: string;
   status: 'not_checked' | 'verified' | 'endpoint_unseen' | 'unsupported_response' | 'not_authenticated' | 'unavailable' | 'page_changed' | 'identity_mismatch' | 'duplicate_identity';
-  fields?: { root: Record<string, string>; data: Record<string, string> };
+  fields?: { root: Record<string, string>; data: Record<string, string>; account_info?: Record<string, string> };
 };

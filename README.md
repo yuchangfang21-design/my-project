@@ -32,7 +32,7 @@ npm run test:packaged
 
 Linux 图形测试需要 Xvfb 或已有 DISPLAY，缺少默认 Xvfb 时可设置 `XUMU_XVFB_PATH`。Windows 不使用 Xvfb。SQLite 13 使用 npm 包中已验证可由 Electron 加载的 Node-API 预编译模块；不执行多余的 ABI 重编译。
 
-**Windows安装包：** [0.4.7上传就绪修复版下载入口](https://github.com/yuchangfang21-design/my-project/actions/runs/39211484503)。登录GitHub，在页面 **Artifacts** 下载 **Xumu-Windows-x64**（119MB），解压并运行 `Xumu-0.4.7-win-x64.exe`。Windows原生桌面109项、打包后程序3项全部通过，无失败或跳过。保留原账号配置；仍只测试一个私密任务，按[测试步骤](docs/private-publishing-trial.md)操作。CI通过不代表真实站点发布已验收。
+**Windows安装包：** [0.4.8内容管理检查修复版下载入口](https://github.com/yuchangfang21-design/my-project/actions/runs/39218216402)。登录GitHub，在页面 **Artifacts** 下载 **Xumu-Windows-x64**（119MB），解压并运行 `Xumu-0.4.8-win-x64.exe`。Windows原生桌面111项、打包后程序3项全部通过，无失败或跳过。保留原账号配置；仍只测试一个私密任务，按[测试步骤](docs/private-publishing-trial.md)操作。CI通过不代表真实站点发布已验收。
 
 **权限验证：** [Windows原生补充验收](https://github.com/yuchangfang21-design/my-project/actions/runs/39122040630)已用NTFS ACL覆盖0.4.1中原先跳过的两项场景，完整桌面套件77项通过、0失败、0跳过；备份无法创建时保留旧数据库，恢复权限后可升级。0.4.2完整构建也执行了这些测试。详见[权限验证记录](docs/windows-permissions-followup.md)。
 

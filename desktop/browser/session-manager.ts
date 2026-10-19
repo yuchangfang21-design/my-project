@@ -71,7 +71,7 @@ export class SessionManager {
     const page=context.pages().find(page=>{try{return new URL(page.url()).origin==='https://creator.douyin.com';}catch{return false;}}) || context.pages()[0];let identity:Identity|null=null;
     let summary:IdentityReadSummary={status:'not_checked'};
     try{if(page){if(this.dependencies.observe)identity=await this.dependencies.observe(page);else{const result=await readIdentity(page);identity=result.identity;summary=result.summary;}}}catch{summary={status:'unavailable'};}
-    const reasons:Partial<Record<IdentityReadSummary['status'],string>>={endpoint_unseen:'当前页面尚未观察到账号信息接口。请在官方创作者首页完成登录后，点击“检查状态”。',unsupported_response:'已读取账号接口，但响应字段尚未匹配。请生成接入检查报告，报告仅包含字段类型。',not_authenticated:'账号接口拒绝访问或未确认登录，请在官方浏览器中核对后重试。',unavailable:'暂时无法读取官方账号信息，请检查浏览器与网络后重试。',page_changed:'账号页面已切换，本次核实已停止，请重试。'};
+    const reasons:Partial<Record<IdentityReadSummary['status'],string>>={endpoint_unseen:'请在官方创作者工作区打开已登录账号，再点击“检查状态”。',unsupported_response:'已读取账号接口，但响应字段尚未匹配。请生成接入检查报告，报告仅包含字段类型。',not_authenticated:'账号接口拒绝访问或未确认登录，请在官方浏览器中核对后重试。',unavailable:'暂时无法读取官方账号信息，请检查浏览器与网络后重试。',page_changed:'账号页面已切换，本次核实已停止，请重试。'};
     let observation:LoginObservation={...prior,status:'pending_confirmation',reason:reasons[summary.status]||'请在官方页面完成登录后，点击“检查状态”核实当前账号。'};
     if(identity&&typeof identity.remoteId==='string'&&identity.remoteId&&identity.remoteId.length<=200&&typeof identity.displayName==='string'&&identity.displayName&&Number.isFinite(Date.parse(identity.observedAt))){
       const duplicate=this.repository.snapshot().accounts.find(a=>a.id!==accountId&&a.identity?.remoteId===identity.remoteId);

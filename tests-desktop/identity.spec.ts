@@ -17,7 +17,7 @@ test('identity accepts the observed endpoint trailing slash hidden by the old ro
   } finally { await app.close(); await rm(root, { recursive: true, force: true }); }
 });
 
-test('identity reads the observed self-account endpoint with exact numeric IDs and blocks duplicate or switched accounts', async () => {
+test('identity reads the confirmed passport endpoint with exact numeric IDs and blocks duplicate or switched accounts', async () => {
   const root = await mkdtemp(join(tmpdir(), 'xumu-identity-')); const app = await launchDesktop(root);
   try {
     const result = await app.evaluate(async (_electron, dir) => {
@@ -72,7 +72,7 @@ for (const scenario of ['unobserved', 'foreign', 'redirect', 'navigation_race'])
         }
         const foreignCount = f.foreignRequests.length, count = f.requests.length;
         if (input.scenario === 'redirect') {
-          f.responses.set(f.accounts[0].id, { status: 302, body: '', headers: { location: 'https://foreign.invalid/account/api/v1/user/account/info' } });
+          f.responses.set(f.accounts[0].id, { status: 302, body: '', headers: { location: 'https://foreign.invalid/passport/account/info/v2/' } });
           const read = await f.manager.withAccountPage(f.accounts[0].id, (page: any) => readIdentity(page));
           return { read, requestDelta: f.requests.length - count, redirectNotFollowed: foreignCount === f.foreignRequests.length };
         }
@@ -143,6 +143,8 @@ test('identity rejects malformed responses and exposes only allowlisted field ty
           { message: 'success', data: { user_id_str: '1234', user_id: 1235, screen_name: 'PRIVATE_NAME' } },
           { message: 'success', data: { user_id_str: '1234', screen_name: 'PRIVATE_NAME', error_code: 12 } },
           { message: 'success', data: { user_id_str: '1234', screen_name: 'PRIVATE_NAME', is_login: false } },
+          { message: 'success', data: { user_id_str: '1234', screen_name: 'PRIVATE_NAME', is_visitor_account: true } },
+          { message: 'success', data: { user_id_str: '1234', screen_name: 'PRIVATE_NAME', app_id: 9999 } },
           { message: 'success', data: [] },
         ];
         const rejected = [];
@@ -168,7 +170,7 @@ test('identity rejects malformed responses and exposes only allowlisted field ty
   } finally { await app.close(); await rm(root, { recursive: true, force: true }); }
 });
 
-test('identity handles the observed account_info envelope without exporting account values', async () => {
+test('identity rejects the account-type envelope as passport identity without exporting values', async () => {
   const root = await mkdtemp(join(tmpdir(), 'xumu-identity-account-info-')); const app = await launchDesktop(root);
   try {
     const result = await app.evaluate(async (_electron, dir) => {
@@ -180,7 +182,7 @@ test('identity handles the observed account_info envelope without exporting acco
         const refresh = async (body: string) => { f.responses.set(f.accounts[0].id, { body, contentType: 'application/json' }); return f.manager.refresh(f.accounts[0].id); };
         const unknown = await refresh(JSON.stringify({ status_code: 0, account_info: { uid: 'PRIVATE_ID', user_name: 'PRIVATE_NAME', mobile: 'PRIVATE_PHONE' } }));
         const report = await f.manager.inspect(f.accounts[0].id);
-        const accepted = await refresh('{"status_code":0,"account_info":{"user_id":9007199254740993,"user_name":"PRIVATE_NAME"}}');
+        const oldEnvelope = await refresh('{"status_code":0,"account_info":{"user_id":9007199254740993,"user_name":"PRIVATE_NAME"}}');
         const rejected = [];
         for (const payload of [
           { status_code: 9, account_info: { user_id_str: '9007199254740993', user_name: 'PRIVATE_NAME' } },
@@ -190,13 +192,37 @@ test('identity handles the observed account_info envelope without exporting acco
           { status_code: 0, data: { user_id_str: '9007199254740994', screen_name: 'OTHER' }, account_info: { user_id_str: '9007199254740993', user_name: 'PRIVATE_NAME' } },
           { status_code: 0, account_info: { user_id_str: '9007199254740994', user_name: 'SWITCHED' } },
         ]) rejected.push((await refresh(JSON.stringify(payload))).status);
-        return { unknown, report, accepted, rejected };
+        return { unknown, report, oldEnvelope, rejected };
       } finally { await f.close(); }
     }, root);
     expect(result.unknown.status).toBe('pending_confirmation');
     expect(result.report.identityRead?.fields).toMatchObject({ root: { status_code: 'number', account_info: 'object' }, account_info: { uid: 'string', user_name: 'string' } });
     expect(JSON.stringify(result.report)).not.toContain('PRIVATE_');
-    expect(result.accepted).toMatchObject({ status: 'logged_in', identity: { remoteId: 'douyin-account:9007199254740993', displayName: 'PRIVATE_NAME' } });
+    expect(result.oldEnvelope.status).toBe('pending_confirmation');
     expect(result.rejected).toEqual(Array(6).fill('pending_confirmation'));
+  } finally { await app.close(); await rm(root, { recursive: true, force: true }); }
+});
+
+
+test('identity checks the confirmed passport API from home and upload without resource history', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'xumu-passport-identity-')); const app = await launchDesktop(root);
+  try {
+    const result = await app.evaluate(async (_electron, dir) => {
+      const require = process.getBuiltinModule('module')!.createRequire(process.cwd() + '/package.json');
+      const { createIdentityFixture } = require(require('node:path').join(process.cwd(), 'tests-desktop/identity-fixture.cjs'));
+      const f = await createIdentityFixture(dir, { endpoint: '/passport/account/info/v2', trailingSlash: true, prepareResource: false });
+      try {
+        await f.open(0);
+        f.responses.set(f.accounts[0].id, { body: '{"message":"success","data":{"user_id":9007199254740993,"user_id_str":"9007199254740993","screen_name":"PRIVATE_NAME","mobile":"PRIVATE_PHONE","session_key":"PRIVATE_SESSION"}}', contentType: 'application/json' });
+        const home = await f.manager.refresh(f.accounts[0].id);
+        await f.manager.withAccountPage(f.accounts[0].id, async (page: any) => { await page.goto('https://creator.douyin.com/creator-micro/content/upload', { waitUntil: 'load' }); });
+        const upload = await f.manager.refresh(f.accounts[0].id), report = await f.manager.inspect(f.accounts[0].id);
+        return { home, upload, report, requests: f.requests };
+      } finally { await f.close(); }
+    }, root);
+    for (const observation of [result.home, result.upload]) expect(observation).toMatchObject({ status: 'logged_in', identity: { remoteId: 'douyin-account:9007199254740993', displayName: 'PRIVATE_NAME' } });
+    expect(result.requests.length).toBe(2);
+    expect(result.requests.every((r: any) => r.method === 'GET' && r.path === '/passport/account/info/v2/' && r.queryPreserved)).toBe(true);
+    for (const privateValue of ['PRIVATE_', '9007199254740993']) expect(JSON.stringify(result.report)).not.toContain(privateValue);
   } finally { await app.close(); await rm(root, { recursive: true, force: true }); }
 });

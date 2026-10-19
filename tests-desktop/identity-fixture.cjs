@@ -2,10 +2,10 @@ const path = require('node:path');
 const { chromium } = require('playwright-core');
 const { Repository } = require('../dist-desktop/desktop/storage/repository.js');
 const { SessionManager } = require('../dist-desktop/desktop/browser/session-manager.js');
-const endpoint = '/account/api/v1/user/account/info';
+const endpoint = '/passport/account/info/v2';
 
 async function createIdentityFixture(root, options = {}) {
-  const observedPath = endpoint + (options.trailingSlash ? '/' : '');
+  const observedPath = (options.endpoint || endpoint) + (options.trailingSlash ? '/' : '');
   const repo = new Repository(path.join(root, 'db')); repo.initialize();
   const accounts = [repo.createAccount({ name: '本地夹具一', group: '测试' }), repo.createAccount({ name: '本地夹具二', group: '测试' })];
   const responses = new Map(accounts.map(a => [a.id, { body: '{"message":"success","data":{"user_id":9007199254740993,"screen_name":"夹具身份","mobile":"PRIVATE_PHONE","session_key":"PRIVATE_SESSION"}}', status: 200, contentType: 'application/json' }]));
@@ -31,6 +31,7 @@ async function createIdentityFixture(root, options = {}) {
     await manager.open(accounts[index].id);
     await manager.withAccountPage(accounts[index].id, async page => {
       await page.goto('https://creator.douyin.com/creator-micro/home', { waitUntil: 'load' });
+      if (options.prepareResource === false) return;
       // Prepare the observed resource explicitly, not through a page's inline
       // bootstrap callback. A fetch failure now surfaces its actual cause.
       await page.evaluate(async resource => {
@@ -38,7 +39,7 @@ async function createIdentityFixture(root, options = {}) {
         if (!response.ok) throw new Error('fixture account request failed: ' + response.status);
         await response.text();
       }, observedPath + '?aid=2906&fixture=PRIVATE_QUERY');
-      await page.waitForFunction(() => performance.getEntriesByType('resource').some(entry => new URL(entry.name).pathname.replace(/\/$/, '') === '/account/api/v1/user/account/info'));
+      await page.waitForFunction(expected => performance.getEntriesByType('resource').some(entry => new URL(entry.name).pathname === expected), observedPath);
     });
   }
   return { repo, accounts, responses, contexts, requests, foreignRequests, manager, open, close: async () => { await manager.closeAll(); repo.close(); } };
